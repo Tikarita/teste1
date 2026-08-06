@@ -1,0 +1,20 @@
+path: dados
+train: images/train
+val: images/valid
+test: images/test
+nc: 14
+names:
+- IMP
+- PRR
+- OBT
+- END
+- CAR
+- BON
+- IMT
+- API
+- ROT
+- FUR
+- APS
+- ROR
+- ORD
+- SRD
