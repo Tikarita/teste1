@@ -1,19 +1,14 @@
-# Ambiente virtual Python
+aktia-backend/venv/
+__pycache__/
+*.pyc
+.env
+# Ambiente virtual
 venv/
-.venv/
-**/venv/
-**/.venv/
+aktia-backend/venv/
 
-# Arquivos Python
+# Cache do Python
 __pycache__/
 *.py[cod]
 
 # Variáveis de ambiente
 .env
-**/.env
-
-# VS Code
-.vscode/
-
-# Logs
-*.log
