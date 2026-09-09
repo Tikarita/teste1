@@ -1,208 +1,231 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from app.services.supabase_service import supabase
 from uuid import uuid4
 
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
+from app.core.config import settings
+from app.services.analysis_service import analyze_radiograph
+from app.services.image_service import validate_image
+from app.services.supabase_service import supabase
+
 router = APIRouter(
-prefix="/api/v1/analysis",
-tags=["Analysis"]
+    prefix="/analysis",
+    tags=["Analysis"]
 )
+
 
 @router.post("/upload")
 async def upload_radiograph(
-clinic_id: str = Form(...),
-uploaded_by: str = Form(...),
-file: UploadFile = File(...)
+    clinic_id: str = Form(...),
+    uploaded_by: str = Form(...),
+    file: UploadFile = File(...)
 ):
-allowed_types = [
-"image/jpeg",
-"image/png",
-"image/jpg"
-]
+    if file.content_type not in settings.ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato de arquivo não suportado. Envie JPG ou PNG."
+        )
 
-```
-if file.content_type not in allowed_types:
-    raise HTTPException(
-        status_code=400,
-        detail="Formato de arquivo não suportado. Envie JPG ou PNG."
-    )
+    file_content = await file.read()
 
-file_extension = file.filename.split(".")[-1]
+    validate_image(file_content, max_size_bytes=settings.MAX_UPLOAD_SIZE_BYTES)
 
-unique_file_name = f"{uuid4()}.{file_extension}"
+    file_extension = file.filename.split(".")[-1]
+    unique_file_name = f"{uuid4()}.{file_extension}"
 
-file_content = await file.read()
+    try:
+        supabase.storage.from_("radiographs").upload(
+            path=unique_file_name,
+            file=file_content,
+            file_options={
+                "content-type": file.content_type
+            }
+        )
 
-file_size = len(file_content)
-
-try:
-
-    # Envia a imagem para o Supabase Storage
-    supabase.storage.from_(
-        "radiographs"
-    ).upload(
-        path=unique_file_name,
-        file=file_content,
-        file_options={
-            "content-type": file.content_type
+        radiograph_data = {
+            "clinic_id": clinic_id,
+            "uploaded_by": uploaded_by,
+            "file_name": file.filename,
+            "file_path": unique_file_name,
+            "file_type": file.content_type,
+            "file_size": len(file_content)
         }
-    )
 
-    # Registra a radiografia no banco
-    radiograph_data = {
-        "clinic_id": clinic_id,
-        "uploaded_by": uploaded_by,
-        "file_name": file.filename,
-        "file_path": unique_file_name,
-        "file_type": file.content_type,
-        "file_size": file_size
-    }
+        response = (
+            supabase
+            .table("radiographs")
+            .insert(radiograph_data)
+            .execute()
+        )
 
-    response = (
-        supabase
-        .table("radiographs")
-        .insert(radiograph_data)
-        .execute()
-    )
+        return {
+            "message": "Radiografia enviada e registrada com sucesso",
+            "data": response.data
+        }
 
-    return {
-        "message": "Radiografia enviada e registrada com sucesso",
-        "data": response.data
-    }
+    except HTTPException:
+        raise
 
-except Exception as e:
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
-    raise HTTPException(
-        status_code=500,
-        detail=str(e)
-    )
-```
 
 @router.get("/clinic/{clinic_id}")
 def get_clinic_radiographs(clinic_id: str):
+    try:
+        response = (
+            supabase
+            .table("radiographs")
+            .select("*")
+            .eq("clinic_id", clinic_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
 
-```
-try:
+        return {
+            "data": response.data
+        }
 
-    response = (
-        supabase
-        .table("radiographs")
-        .select("*")
-        .eq("clinic_id", clinic_id)
-        .order("created_at", desc=True)
-        .execute()
-    )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
-    return {
-        "data": response.data
-    }
-
-except Exception as e:
-
-    raise HTTPException(
-        status_code=500,
-        detail=str(e)
-    )
-```
 
 @router.get("/{radiograph_id}")
 def get_radiograph(radiograph_id: str):
+    try:
+        response = (
+            supabase
+            .table("radiographs")
+            .select("*")
+            .eq("id", radiograph_id)
+            .execute()
+        )
 
-```
-try:
+        if not response.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Radiografia não encontrada"
+            )
 
-    response = (
-        supabase
-        .table("radiographs")
-        .select("*")
-        .eq("id", radiograph_id)
-        .execute()
-    )
+        radiograph = response.data[0]
 
-    if not response.data:
+        signed_url_response = (
+            supabase
+            .storage
+            .from_("radiographs")
+            .create_signed_url(
+                radiograph["file_path"],
+                3600
+            )
+        )
+
+        return {
+            "data": radiograph,
+            "signed_url": signed_url_response
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
         raise HTTPException(
-            status_code=404,
-            detail="Radiografia não encontrada"
+            status_code=500,
+            detail=str(e)
         )
 
-    radiograph = response.data[0]
 
-    signed_url_response = (
-        supabase
-        .storage
-        .from_("radiographs")
-        .create_signed_url(
-            radiograph["file_path"],
-            3600
+@router.post("/{radiograph_id}/analyze")
+def analyze_radiograph_by_id(radiograph_id: str):
+    try:
+        response = (
+            supabase
+            .table("radiographs")
+            .select("*")
+            .eq("id", radiograph_id)
+            .execute()
         )
-    )
 
-    return {
-        "data": radiograph,
-        "signed_url": signed_url_response
-    }
+        if not response.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Radiografia não encontrada"
+            )
 
-except HTTPException:
-    raise
+        radiograph = response.data[0]
 
-except Exception as e:
+        image_bytes = supabase.storage.from_("radiographs").download(
+            radiograph["file_path"]
+        )
 
-    raise HTTPException(
-        status_code=500,
-        detail=str(e)
-    )
-```
+        result = analyze_radiograph(image_bytes)
+
+        try:
+            supabase.table("radiographs").update({
+                "analysis_result": result
+            }).eq("id", radiograph_id).execute()
+        except Exception:
+            pass
+
+        return {
+            "data": result
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
 
 @router.delete("/{radiograph_id}")
 def delete_radiograph(radiograph_id: str):
-
-```
-try:
-
-    # Busca a radiografia no banco
-    response = (
-        supabase
-        .table("radiographs")
-        .select("*")
-        .eq("id", radiograph_id)
-        .execute()
-    )
-
-    if not response.data:
-        raise HTTPException(
-            status_code=404,
-            detail="Radiografia não encontrada"
+    try:
+        response = (
+            supabase
+            .table("radiographs")
+            .select("*")
+            .eq("id", radiograph_id)
+            .execute()
         )
 
-    radiograph = response.data[0]
+        if not response.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Radiografia não encontrada"
+            )
 
-    # Remove o arquivo do Storage
-    supabase.storage.from_(
-        "radiographs"
-    ).remove([
-        radiograph["file_path"]
-    ])
+        radiograph = response.data[0]
 
-    # Remove o registro do banco
-    (
-        supabase
-        .table("radiographs")
-        .delete()
-        .eq("id", radiograph_id)
-        .execute()
-    )
+        supabase.storage.from_("radiographs").remove([
+            radiograph["file_path"]
+        ])
 
-    return {
-        "message": "Radiografia excluída com sucesso",
-        "id": radiograph_id
-    }
+        (
+            supabase
+            .table("radiographs")
+            .delete()
+            .eq("id", radiograph_id)
+            .execute()
+        )
 
-except HTTPException:
-    raise
+        return {
+            "message": "Radiografia excluída com sucesso",
+            "id": radiograph_id
+        }
 
-except Exception as e:
+    except HTTPException:
+        raise
 
-    raise HTTPException(
-        status_code=500,
-        detail=str(e)
-    )
-```
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )

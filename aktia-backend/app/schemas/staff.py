@@ -3,11 +3,11 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 
-class UserCreate(BaseModel):
+class StaffCreate(BaseModel):
 
     clinic_id: UUID
 
-    name: str = Field(
+    full_name: str = Field(
         min_length=2,
         max_length=150
     )
@@ -15,5 +15,5 @@ class UserCreate(BaseModel):
     email: EmailStr
 
     role: str = Field(
-        default="user"
+        default="dentist"
     )
