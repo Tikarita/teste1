@@ -2,6 +2,7 @@ export interface Clinic {
   id: string;
   name: string;
   cnpj: string;
+  email?: string | null;
   created_at?: string;
 }
 
@@ -12,6 +13,14 @@ export interface StaffMember {
   email: string;
   role: string;
   created_at?: string;
+}
+
+export interface AuthSession {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number | null;
+  user: StaffMember;
+  clinic: Clinic;
 }
 
 export interface BoundingBox {
@@ -33,13 +42,16 @@ export interface YoloResult {
   findings: YoloFinding[];
 }
 
-export type QualityStatus = "approved" | "attention" | "rejected";
+export type QualityStatus = "approved" | "attention" | "rejected" | "pending";
 
 export interface QualityCriterion {
   category: string;
   label: string;
-  score: number;
+  /** null quando o critério ainda não é avaliado automaticamente (status "pending"). */
+  score: number | null;
   status: QualityStatus;
+  /** Valor bruto da métrica de visão computacional por trás do score (ex.: variância do Laplaciano). */
+  raw_value?: number | null;
 }
 
 export interface EfficientNetResult {

@@ -10,7 +10,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function Clinic() {
-  const { clinics, selectedClinicId, refresh: refreshClinics } = useClinics();
+  const { clinics, selectedClinicId } = useClinics();
   const activeClinic = clinics.find((c) => c.id === selectedClinicId) ?? null;
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -26,12 +26,6 @@ export default function Clinic() {
   const [staffSubmitting, setStaffSubmitting] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string } | null>(null);
-
-  const [showNewClinic, setShowNewClinic] = useState(false);
-  const [clinicName, setClinicName] = useState("");
-  const [clinicCnpj, setClinicCnpj] = useState("");
-  const [clinicSubmitting, setClinicSubmitting] = useState(false);
-  const [clinicError, setClinicError] = useState<string | null>(null);
 
   function loadStaff() {
     if (!selectedClinicId) {
@@ -109,82 +103,12 @@ export default function Clinic() {
     }
   }
 
-  async function handleCreateClinic(e: FormEvent) {
-    e.preventDefault();
-    setClinicSubmitting(true);
-    setClinicError(null);
-
-    try {
-      await api.createClinic({ name: clinicName, cnpj: clinicCnpj });
-      setClinicName("");
-      setClinicCnpj("");
-      setShowNewClinic(false);
-      refreshClinics();
-    } catch (err) {
-      setClinicError(err instanceof ApiError ? err.message : "Erro ao cadastrar clínica");
-    } finally {
-      setClinicSubmitting(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Clínica</h1>
-          <p className="text-sm text-slate-500">Dados da clínica ativa e da equipe vinculada a ela.</p>
-        </div>
-        <button
-          onClick={() => setShowNewClinic((v) => !v)}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          {showNewClinic ? "Cancelar" : "+ Nova clínica"}
-        </button>
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Clínica</h1>
+        <p className="text-sm text-slate-500">Dados da clínica ativa e da equipe vinculada a ela.</p>
       </div>
-
-      {showNewClinic && (
-        <form onSubmit={handleCreateClinic} className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Cadastrar nova clínica</h2>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Nome</label>
-              <input
-                required
-                minLength={2}
-                maxLength={150}
-                value={clinicName}
-                onChange={(e) => setClinicName(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Clínica Sorriso"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">CNPJ</label>
-              <input
-                required
-                minLength={14}
-                maxLength={18}
-                value={clinicCnpj}
-                onChange={(e) => setClinicCnpj(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                placeholder="00.000.000/0000-00"
-              />
-            </div>
-          </div>
-
-          {clinicError && <p className="mt-3 text-sm text-red-600">{clinicError}</p>}
-
-          <button
-            type="submit"
-            disabled={clinicSubmitting}
-            className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {clinicSubmitting ? "Cadastrando..." : "Cadastrar clínica"}
-          </button>
-        </form>
-      )}
 
       {!activeClinic ? (
         <p className="text-sm text-slate-500">Nenhuma clínica selecionada.</p>
@@ -201,6 +125,12 @@ export default function Clinic() {
                 <dt className="text-slate-500">CNPJ</dt>
                 <dd className="font-medium text-slate-900">{activeClinic.cnpj}</dd>
               </div>
+              {activeClinic.email && (
+                <div>
+                  <dt className="text-slate-500">E-mail</dt>
+                  <dd className="font-medium text-slate-900">{activeClinic.email}</dd>
+                </div>
+              )}
             </dl>
           </div>
 
@@ -310,7 +240,7 @@ export default function Clinic() {
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <h2 className="mb-1 text-sm font-semibold text-slate-700">Controle de qualidade por profissional</h2>
             <p className="mb-3 text-xs text-slate-500">
-              Índice técnico médio (EfficientNet) das radiografias enviadas por cada profissional —
+              Índice técnico médio (nitidez, contraste, exposição) das radiografias enviadas por cada profissional —
               mostra quem está tirando exames tecnicamente adequados para diagnóstico com consistência.
             </p>
 

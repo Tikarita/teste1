@@ -6,13 +6,15 @@ import type { AnalysisResult, QualityStatus, Radiograph } from "../lib/types";
 const STATUS_STYLES: Record<QualityStatus, string> = {
   approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
   attention: "bg-amber-50 text-amber-700 border-amber-200",
-  rejected: "bg-red-50 text-red-700 border-red-200"
+  rejected: "bg-red-50 text-red-700 border-red-200",
+  pending: "bg-slate-50 text-slate-500 border-slate-200"
 };
 
 const STATUS_LABELS: Record<QualityStatus, string> = {
   approved: "Aprovado",
   attention: "Atenção",
-  rejected: "Reprovado"
+  rejected: "Reprovado",
+  pending: "Pendente"
 };
 
 const BOX_COLORS = ["#f97316", "#3b82f6", "#a855f7", "#ef4444", "#10b981"];
@@ -175,7 +177,7 @@ export default function RadiographDetail() {
             {!analysis && !analyzeError && (
               <p className="text-sm text-slate-400">
                 Nenhuma análise realizada ainda. Clique em "Analisar" para rodar a detecção de
-                achados (YOLOv8) e a checagem de adequação técnica (EfficientNet).
+                achados (YOLOv8) e a checagem de adequação técnica.
               </p>
             )}
           </div>
@@ -186,7 +188,9 @@ export default function RadiographDetail() {
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-slate-700">Controle de qualidade da imagem</h3>
-                    <p className="text-xs text-slate-400">EfficientNet · a imagem está boa o suficiente para diagnóstico?</p>
+                    <p className="text-xs text-slate-400">
+                      Métricas de imagem (nitidez, contraste, exposição) · a imagem está boa o suficiente para diagnóstico?
+                    </p>
                   </div>
                   <span
                     className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
@@ -207,11 +211,17 @@ export default function RadiographDetail() {
                 <ul className="space-y-1.5">
                   {analysis.efficientnet.criteria.map((criterion) => (
                     <li key={criterion.category} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">{criterion.label}</span>
+                      <span className="text-slate-600">
+                        {criterion.label}
+                        {criterion.raw_value != null && (
+                          <span className="ml-1.5 text-xs text-slate-400">({criterion.raw_value})</span>
+                        )}
+                      </span>
                       <span
                         className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[criterion.status]}`}
                       >
-                        {STATUS_LABELS[criterion.status]} · {criterion.score}
+                        {STATUS_LABELS[criterion.status]}
+                        {criterion.score != null ? ` · ${criterion.score}` : ""}
                       </span>
                     </li>
                   ))}

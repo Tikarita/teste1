@@ -1,21 +1,47 @@
-import type { AnalysisResult, Clinic, Radiograph, StaffMember } from "./types";
+import type { AnalysisResult, AuthSession, Clinic, Radiograph, StaffMember } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 const ROOT_URL = API_URL.replace(/\/api\/v1\/?$/, "");
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * Token mantido em módulo, e não importado do AuthContext, para evitar
+ * dependência circular (o contexto já importa este arquivo).
+ */
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
 
 async function request<T>(path: string, options?: RequestInit, baseUrl = API_URL): Promise<T> {
+  const headers: Record<string, string> = {};
+
+  if (!(options?.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
   const response = await fetch(`${baseUrl}${path}`, {
-    headers: options?.body instanceof FormData
-      ? undefined
-      : { "Content-Type": "application/json" },
-    ...options
+    ...options,
+    headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) }
   });
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new ApiError(body?.detail ?? `Erro ${response.status} ao chamar ${path}`);
+    const detail = typeof body?.detail === "string" ? body.detail : null;
+    throw new ApiError(detail ?? `Erro ${response.status} ao chamar ${path}`, response.status);
   }
 
   return response.json() as Promise<T>;
@@ -24,6 +50,30 @@ async function request<T>(path: string, options?: RequestInit, baseUrl = API_URL
 export const api = {
   health: () => request<{ status: string }>("/health", undefined, ROOT_URL),
   databaseTest: () => request<{ message: string; data: unknown }>("/system/database-test"),
+
+  register: (payload: {
+    clinic_name: string;
+    cnpj: string;
+    admin_name: string;
+    email: string;
+    password: string;
+  }) =>
+    request<AuthSession>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  login: (payload: { email: string; password: string }) =>
+    request<AuthSession>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  me: () => request<{ user: StaffMember; clinic: Clinic }>("/auth/me"),
+  refreshSession: (refreshToken: string) =>
+    request<AuthSession>("/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken })
+    }),
+  logout: () => request<{ message: string }>("/auth/logout", { method: "POST" }),
 
   listClinics: () => request<{ data: Clinic[] }>("/clinics/"),
   createClinic: (payload: { name: string; cnpj: string }) =>

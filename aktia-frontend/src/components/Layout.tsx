@@ -1,5 +1,5 @@
-import { NavLink, Outlet } from "react-router-dom";
-import { useClinics } from "../context/ClinicContext";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const navItems = [
   { to: "/", label: "Dashboard", end: true },
@@ -8,13 +8,20 @@ const navItems = [
 ];
 
 export default function Layout() {
-  const { clinics, selectedClinicId, setSelectedClinicId, loading } = useClinics();
+  const { user, clinic, logout } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login", { replace: true });
+  }
 
   return (
     <div className="min-h-screen flex">
       <aside className="w-60 shrink-0 bg-slate-900 text-slate-100 flex flex-col">
-        <div className="px-5 py-4 text-lg font-semibold border-b border-slate-800">
-          AktIA
+        <div className="px-5 py-4 border-b border-slate-800">
+          <p className="text-lg font-semibold">AktIA</p>
+          {clinic && <p className="mt-0.5 truncate text-xs text-slate-400">{clinic.name}</p>}
         </div>
 
         <nav className="flex-1 px-2 py-4 space-y-1">
@@ -43,21 +50,23 @@ export default function Layout() {
 
       <div className="flex-1 flex flex-col">
         <header className="h-14 border-b border-slate-200 bg-white flex items-center justify-between px-6">
-          <span className="text-sm text-slate-500">Clínica ativa</span>
+          <span className="text-sm text-slate-500">{clinic?.name ?? "Clínica"}</span>
 
-          <select
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-            value={selectedClinicId ?? ""}
-            onChange={(e) => setSelectedClinicId(e.target.value || null)}
-            disabled={loading || clinics.length === 0}
-          >
-            {clinics.length === 0 && <option value="">Nenhuma clínica cadastrada</option>}
-            {clinics.map((clinic) => (
-              <option key={clinic.id} value={clinic.id}>
-                {clinic.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-4">
+            {user && (
+              <div className="text-right leading-tight">
+                <p className="text-sm font-medium text-slate-700">{user.full_name}</p>
+                <p className="text-xs text-slate-400">{user.email}</p>
+              </div>
+            )}
+
+            <button
+              onClick={handleLogout}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Sair
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 p-6">
