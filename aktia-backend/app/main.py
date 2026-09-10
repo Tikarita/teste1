@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.analysis import router as analysis_router
+from app.api.auth import router as auth_router
 from app.api.clinics import router as clinics_router
 from app.api.staff import router as staff_router
 from app.api.system import router as system_router
@@ -22,6 +23,7 @@ app.add_middleware(
 )
 
 
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(analysis_router, prefix="/api/v1")
 app.include_router(system_router, prefix="/api/v1")
 app.include_router(clinics_router, prefix="/api/v1")
