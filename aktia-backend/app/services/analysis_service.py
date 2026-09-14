@@ -4,6 +4,8 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
+from app.services.efficientnet_service import classify_adequacy
+
 # Mapeamento provisório dos 14 códigos de classe do dataset de treino
 # (dados/data.yaml). Ainda não há confirmação oficial do significado de
 # cada sigla — revise antes de usar em laudo real.
@@ -170,17 +172,21 @@ def _clipping_metric(gray: np.ndarray) -> float:
 
 def run_efficientnet_adequacy(image_bytes: bytes) -> dict:
     """
-    Controle de qualidade técnica — Fase 1: métricas clássicas de visão
-    computacional, calculadas diretamente da imagem, sem machine learning e
-    sem depender de dataset rotulado. `positioning` e `coverage` ficam como
+    Controle de qualidade técnica da radiografia (adequado/inadequado).
+
+    A decisão (`is_adequate`/`score`/`model`) vem de uma EfficientNet-B0 real
+    (ver efficientnet_service.classify_adequacy): a rede extrai um embedding
+    da imagem e mede a distância a um centróide de "normalidade" calculado
+    offline a partir de radiografias típicas — ainda não é um classificador
+    supervisionado porque não há dataset rotulado adequado/inadequado, mas já
+    é inferência de rede neural de verdade, não um placeholder.
+
+    O detalhamento por critério (nitidez/contraste/artefatos) continua vindo
+    de métricas clássicas de visão computacional, calculadas diretamente da
+    imagem — mantido como informação complementar para o usuário entender
+    possíveis causas do resultado. `positioning` e `coverage` ficam como
     "pending" (ver PENDING_CATEGORIES) até existir um YOLO treinado para
     localizar a anatomia na imagem.
-
-    O nome da função e o campo "model" seguem "efficientnet" apenas por
-    compatibilidade com o restante da API — nenhuma rede neural roda aqui.
-    Uma fase futura pode treinar um classificador real usando rótulos
-    coletados via feedback dos usuários (Fase 2) combinados com estas
-    mesmas métricas como features.
     """
     gray = _load_grayscale_array(image_bytes)
 
@@ -215,9 +221,7 @@ def run_efficientnet_adequacy(image_bytes: bytes) -> dict:
                 "raw_value": round(metric_by_category[key], 4)
             })
 
-    evaluated = [c for c in criteria if c["score"] is not None]
-    overall_score = round(sum(c["score"] for c in evaluated) / len(evaluated)) if evaluated else 0
-    is_adequate = overall_score >= 70 and all(c["status"] != "rejected" for c in evaluated)
+    model_result = classify_adequacy(image_bytes)
 
     pending_labels = [c["label"] for c in criteria if c["status"] == "pending"]
     pending_note = (
@@ -226,15 +230,15 @@ def run_efficientnet_adequacy(image_bytes: bytes) -> dict:
     )
 
     recommendation = (
-        "Qualidade técnica adequada nos critérios avaliados."
-        if is_adequate else
+        "Qualidade técnica adequada."
+        if model_result["is_adequate"] else
         "Qualidade técnica abaixo do ideal — considere repetir a captura antes do laudo."
     ) + pending_note
 
     return {
-        "model": "quality-heuristics-v1",
-        "is_adequate": is_adequate,
-        "score": overall_score,
+        "model": model_result["model"],
+        "is_adequate": model_result["is_adequate"],
+        "score": model_result["score"],
         "criteria": criteria,
         "recommendation": recommendation
     }

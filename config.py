@@ -39,4 +39,4 @@ YOLO_CLASSES = [
 ]
 
 # Classes de qualidade (EfficientNet)
-QC_CLASSES = ["inaceitavel", "aceitavel"]
+QC_CLASSES = ["inadequado", "adequado"]

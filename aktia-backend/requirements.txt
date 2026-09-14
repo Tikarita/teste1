@@ -8,3 +8,5 @@ python-multipart==0.0.20
 Pillow==11.1.0
 numpy==2.2.1
 truststore==0.10.4
+torch==2.14.0
+torchvision==0.29.0
