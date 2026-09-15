@@ -44,6 +44,20 @@ def _images_in(directory: Path) -> list:
     return sorted(paths)
 
 
+def image_key(path: Path) -> str:
+    """Identificador estável e portável entre máquinas/perfis de usuário.
+
+    Usa o caminho relativo a DATA_DIR (ex.: "images/train/593.jpg") em vez do
+    caminho absoluto, que embute o nome do usuário do Windows e quebra ao
+    trocar de perfil/computador (rótulos "somem" e o app deixa rotular a
+    mesma imagem de novo, gerando contagem inflada e rótulos conflitantes).
+    """
+    try:
+        return path.relative_to(DATA_DIR).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
+
+
 def list_all_images(seed: int = 42, extra_dirs: list = None) -> list:
     items = []
     for split in SPLITS:
@@ -130,7 +144,7 @@ class LabelApp:
 
     def _next_unlabeled(self, start: int) -> int:
         i = start
-        while i < len(self.items) and str(self.items[i][1]) in self.labels:
+        while i < len(self.items) and image_key(self.items[i][1]) in self.labels:
             i += 1
         return i
 
@@ -157,7 +171,7 @@ class LabelApp:
         if self.index >= len(self.items):
             return
         split, path = self.items[self.index]
-        key = str(path)
+        key = image_key(path)
         self.labels[key] = {"image_path": key, "split": split, "label": label}
         self.history.append(key)
         save_labels(self.labels)
@@ -175,7 +189,7 @@ class LabelApp:
         self.labels.pop(last_key, None)
         save_labels(self.labels)
         for i, (_, path) in enumerate(self.items):
-            if str(path) == last_key:
+            if image_key(path) == last_key:
                 self.index = i
                 break
         self.show_current()
