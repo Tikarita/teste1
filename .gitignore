@@ -12,3 +12,15 @@ __pycache__/
 
 # Variáveis de ambiente
 .env
+
+# Dataset ImageFolder gerado por dataset_qc.py a partir de labels_qualidade.csv
+# (duplicata de dados/images — reconstrua com `python dataset_qc.py`)
+dados/panoramicas/
+
+# Dataset de numeração de dentes gerado por build_teeth_numbering_dataset.py
+# a partir de "Novos dados" (fonte fica fora do repo, em Downloads)
+dados_dentes/
+
+# Bases externas baixadas/organizadas (Mendeley, Kaggle, GitHub, etc.) - 4.7GB+,
+# ver AKTIA_DATASETS/RELATORIO_FINAL.md para licenca/origem de cada uma
+AKTIA_DATASETS/

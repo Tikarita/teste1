@@ -1,10 +1,69 @@
 # dataset_qc.py
+import csv
 import os
 import shutil
 from pathlib import Path
 import cv2
 import numpy as np
 from config import DATA_DIR, YOLO_CLASSES
+
+LABELS_CSV = DATA_DIR / "labels_qualidade.csv"
+PANORAMICAS_DIR = DATA_DIR / "panoramicas"
+
+
+def build_imagefolder_from_labels(
+    labels_csv: Path = LABELS_CSV,
+    output_dir: Path = PANORAMICAS_DIR,
+    copy: bool = True,
+) -> None:
+    """
+    Lê dados/labels_qualidade.csv (gerado por label_tool.py) e organiza as
+    imagens em dados/panoramicas/{train,valid,test}/{adequado,inadequado}/,
+    a estrutura ImageFolder que train_efficientnet.py espera.
+
+    copy=True copia os arquivos (padrão, seguro); copy=False usa symlink
+    (mais rápido, economiza espaço, mas exige permissão no Windows).
+    """
+    if not labels_csv.exists():
+        raise FileNotFoundError(
+            f"{labels_csv} não existe. Rotule as imagens antes com label_tool.py."
+        )
+
+    with open(labels_csv, "r", encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    contagem = {}
+    ausentes = []
+    for row in rows:
+        split, label = row["split"], row["label"]
+        src = DATA_DIR / row["image_path"]
+        if not src.exists():
+            ausentes.append(str(src))
+            continue
+
+        dest_dir = output_dir / split / label
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / src.name
+
+        if copy:
+            shutil.copy2(src, dest)
+        else:
+            if dest.exists() or dest.is_symlink():
+                dest.unlink()
+            dest.symlink_to(src.resolve())
+
+        contagem[(split, label)] = contagem.get((split, label), 0) + 1
+
+    print(f"Dataset organizado em {output_dir}:")
+    for (split, label), n in sorted(contagem.items()):
+        print(f"  {split}/{label}: {n} imagens")
+    if ausentes:
+        print(f"\n{len(ausentes)} imagens listadas no CSV não foram encontradas em disco:")
+        for p in ausentes[:10]:
+            print(f"  {p}")
+        if len(ausentes) > 10:
+            print(f"  ... e mais {len(ausentes) - 10}")
+
 
 def prepare_qc_dataset(
     source_dir: str,
@@ -18,14 +77,14 @@ def prepare_qc_dataset(
     """
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    
+
     images_dir = output / "images"
     labels_dir = output / "labels"
-    
+
     for split in ["train", "valid", "test"]:
         (images_dir / split).mkdir(parents=True, exist_ok=True)
         (labels_dir / split).mkdir(parents=True, exist_ok=True)
-    
+
     # Copia arquivos organizando por split
     # Implemente sua lógica de split aqui
     print("Dataset preparado com sucesso!")
@@ -119,8 +178,4 @@ def analyze_image_quality(img: np.ndarray, yolo_detections: dict = None) -> floa
     return final_score
 
 if __name__ == "__main__":
-    # Exemplo de uso
-    generate_quality_labels(
-        images_dir="dados/panoramicas/train",
-        output_csv="dados/quality_labels_train.csv"
-    )
+    build_imagefolder_from_labels()
