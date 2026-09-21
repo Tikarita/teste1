@@ -10,3 +10,13 @@ numpy==2.2.1
 truststore==0.10.4
 torch==2.14.0
 torchvision==0.29.0
+
+# Processamento de imagem (dataset_qc.py na raiz)
+opencv-python==5.0.0.93
+
+# Scripts de treino/dataset na raiz do repo (não necessários para rodar a API)
+ultralytics==8.4.157
+pandas==3.0.6
+scikit-learn==1.9.1
+PyYAML==6.0.3
+psutil==7.2.2
