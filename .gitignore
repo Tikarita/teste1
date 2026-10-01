@@ -24,3 +24,7 @@ dados_dentes/
 # Bases externas baixadas/organizadas (Mendeley, Kaggle, GitHub, etc.) - 4.7GB+,
 # ver AKTIA_DATASETS/RELATORIO_FINAL.md para licenca/origem de cada uma
 AKTIA_DATASETS/
+
+# Dados empacotados para treino no Google Colab (~3GB) - reconstrua com
+# `python package_for_colab.py`, nao precisa versionar
+colab_upload/
