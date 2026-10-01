@@ -17,6 +17,9 @@ const STATUS_LABELS: Record<QualityStatus, string> = {
   pending: "Pendente"
 };
 
+// VITE_ENABLE_AI=false esconde a análise enquanto a IA não está no ar.
+const AI_ENABLED = import.meta.env.VITE_ENABLE_AI !== "false";
+
 const BOX_COLORS = ["#f97316", "#3b82f6", "#a855f7", "#ef4444", "#10b981"];
 
 export default function RadiographDetail() {
@@ -163,18 +166,24 @@ export default function RadiographDetail() {
                 <h2 className="text-sm font-semibold text-slate-700">Análise de IA</h2>
                 <p className="text-xs text-slate-400">Pré-laudo (achados clínicos) + controle de qualidade da imagem</p>
               </div>
-              <button
-                onClick={handleAnalyze}
-                disabled={analyzing}
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {analyzing ? "Analisando..." : analysis ? "Reanalisar" : "Analisar"}
-              </button>
+              {AI_ENABLED && (
+                <button
+                  onClick={handleAnalyze}
+                  disabled={analyzing}
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {analyzing ? "Analisando..." : analysis ? "Reanalisar" : "Analisar"}
+                </button>
+              )}
             </div>
 
             {analyzeError && <p className="text-sm text-red-600">{analyzeError}</p>}
 
-            {!analysis && !analyzeError && (
+            {!AI_ENABLED && !analysis && (
+              <p className="text-sm text-slate-400">Análise por IA em breve.</p>
+            )}
+
+            {AI_ENABLED && !analysis && !analyzeError && (
               <p className="text-sm text-slate-400">
                 Nenhuma análise realizada ainda. Clique em "Analisar" para rodar a detecção de
                 achados (YOLOv8) e a checagem de adequação técnica.

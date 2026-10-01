@@ -3,7 +3,6 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.core.config import settings
-from app.services.analysis_service import analyze_radiograph
 from app.services.image_service import validate_image
 from app.services.supabase_service import supabase
 
@@ -141,6 +140,15 @@ def get_radiograph(radiograph_id: str):
 
 @router.post("/{radiograph_id}/analyze")
 def analyze_radiograph_by_id(radiograph_id: str):
+    if not settings.ENABLE_AI:
+        raise HTTPException(
+            status_code=503,
+            detail="A análise por IA ainda não está disponível."
+        )
+
+    # Import tardio: o serviço carrega torch, que não é instalado quando a IA está desligada.
+    from app.services.analysis_service import analyze_radiograph
+
     try:
         response = (
             supabase
