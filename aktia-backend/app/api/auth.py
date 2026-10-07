@@ -1,8 +1,9 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.schemas.auth import ClinicRegister, LoginRequest, RefreshRequest
-from app.services.supabase_service import create_auth_client, supabase
+from app.services.supabase_service import create_auth_client, execute_with_retry, supabase
 
 
 router = APIRouter(
@@ -24,13 +25,12 @@ def _session_payload(session, profile: dict, clinic: dict) -> dict:
 
 
 def _load_profile(user_id: str) -> dict:
-    response = (
+    response = execute_with_retry(
         supabase
         .table("profiles")
         .select("*")
         .eq("id", user_id)
         .limit(1)
-        .execute()
     )
 
     if not response.data:
@@ -43,13 +43,12 @@ def _load_profile(user_id: str) -> dict:
 
 
 def _load_clinic(clinic_id: str) -> dict:
-    response = (
+    response = execute_with_retry(
         supabase
         .table("clinics")
         .select("*")
         .eq("id", clinic_id)
         .limit(1)
-        .execute()
     )
 
     if not response.data:
@@ -78,6 +77,13 @@ def get_current_user(
     try:
         auth_client = create_auth_client()
         user_response = auth_client.auth.get_user(credentials.credentials)
+    except httpx.TransportError:
+        # Falha de rede não é sessão inválida: responder 401 aqui deslogaria
+        # o usuário por causa de uma oscilação de conexão.
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível validar a sessão agora. Tente novamente."
+        )
     except Exception:
         raise HTTPException(
             status_code=401,
