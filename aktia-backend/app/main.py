@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.analysis import router as analysis_router
 from app.api.auth import router as auth_router
 from app.api.clinics import router as clinics_router
+from app.api.notifications import router as notifications_router
 from app.api.reports import router as reports_router
 from app.api.staff import router as staff_router
 from app.api.stats import router as stats_router
@@ -32,6 +33,7 @@ app.include_router(clinics_router, prefix="/api/v1")
 app.include_router(staff_router, prefix="/api/v1")
 app.include_router(stats_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
 
 
 @app.get("/")

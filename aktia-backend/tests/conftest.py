@@ -89,7 +89,8 @@ def _schema(database_url):
 def db(database_url, _schema):
     with psycopg.connect(database_url, autocommit=True, row_factory=dict_row) as connection:
         connection.execute(
-            "truncate radiograph_reviews, reports, analysis_findings, analyses, radiographs, profiles, clinics, "
+            "truncate notifications, radiograph_reviews, reports, analysis_findings, analyses, radiographs, "
+            "profiles, clinics, "
             "auth.users, storage.objects cascade"
         )
         yield connection

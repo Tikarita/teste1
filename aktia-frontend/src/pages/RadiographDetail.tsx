@@ -27,12 +27,20 @@ export default function RadiographDetail() {
   const [highlighted, setHighlighted] = useState<number | null>(null);
 
   // Achados só aparecem quando vieram de um modelo real (ver YoloResult.available).
-  const findings = analysis?.yolo.available ? analysis.yolo.findings : [];
+  const detected = analysis?.yolo.available ? analysis.yolo.findings : [];
   const findingsAvailable = analysis?.yolo.available === true;
 
   // ?mapa=1 (link do aviso pós-envio) já abre com o mapa de calor ligado.
   const [searchParams] = useSearchParams();
   const [showHeatmap, setShowHeatmap] = useState(searchParams.get("mapa") === "1");
+  const [expanded, setExpanded] = useState(false);
+  const [openAnyway, setOpenAnyway] = useState(false);
+
+  // Etapa 1 decide a etapa 2: a IA libera o pré-laudo quando considera a
+  // imagem adequada. A revisão do profissional, quando existe, prevalece.
+  const quality = analysis?.efficientnet ?? null;
+  const qualityOk = review ? review.verdict === "adequate" : quality?.is_adequate === true;
+  const preReportOpen = qualityOk || openAnyway;
   const explanation = analysis?.efficientnet.explanation ?? null;
 
   function load() {
@@ -83,6 +91,41 @@ export default function RadiographDetail() {
     }
   }
 
+  // As caixas só aparecem quando o pré-laudo está liberado (ou aberto mesmo assim).
+  const findings = preReportOpen ? detected : [];
+
+  const examImage = imageUrl && radiograph && (
+    <div className="relative inline-block w-full">
+      <img src={imageUrl} alt={radiograph.file_name} className="w-full rounded-md object-contain" />
+
+      {showHeatmap && explanation && <Heatmap grid={explanation.grid} />}
+
+      {/* Com o mapa de calor ligado, as caixas de achados saem para não poluir a leitura. */}
+      {!showHeatmap &&
+        findings.map((finding, i) => (
+          <div
+            key={i}
+            className="absolute rounded-sm border-2 transition-opacity"
+            style={{
+              left: `${finding.bbox.x * 100}%`,
+              top: `${finding.bbox.y * 100}%`,
+              width: `${finding.bbox.width * 100}%`,
+              height: `${finding.bbox.height * 100}%`,
+              borderColor: BOX_COLORS[i % BOX_COLORS.length],
+              opacity: highlighted === null || highlighted === i ? 1 : 0.25
+            }}
+          >
+            <span
+              className="absolute -top-5 left-0 whitespace-nowrap rounded px-1 text-[10px] font-medium text-white"
+              style={{ backgroundColor: BOX_COLORS[i % BOX_COLORS.length] }}
+            >
+              {finding.class_code}
+            </span>
+          </div>
+        ))}
+    </div>
+  );
+
   if (loading) return <p className="text-sm text-slate-400">Carregando...</p>;
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!radiograph) return null;
@@ -106,53 +149,38 @@ export default function RadiographDetail() {
         </button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Imagem</h2>
-            {explanation && (
-              <button
-                onClick={() => setShowHeatmap((current) => !current)}
-                className={`rounded-md border px-3 py-1 text-xs font-medium ${
-                  showHeatmap
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {showHeatmap ? "Ocultar mapa de calor" : "Por que a IA decidiu assim?"}
-              </button>
-            )}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-700">Exame</h2>
+            <div className="flex gap-2">
+              {explanation && (
+                <button
+                  onClick={() => setShowHeatmap((current) => !current)}
+                  className={`rounded-md border px-3 py-1 text-xs font-medium ${
+                    showHeatmap
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {showHeatmap ? "Ocultar mapa de calor" : "Por que a IA decidiu assim?"}
+                </button>
+              )}
+              {imageUrl && (
+                <button
+                  onClick={() => setExpanded(true)}
+                  className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Tela cheia
+                </button>
+              )}
+            </div>
           </div>
 
           {imageUrl ? (
-            <div className="relative inline-block w-full">
-              <img src={imageUrl} alt={radiograph.file_name} className="w-full rounded-md object-contain" />
-
-              {showHeatmap && explanation && <Heatmap grid={explanation.grid} />}
-
-              {/* Com o mapa de calor ligado, as caixas de achados saem para não poluir a leitura. */}
-              {!showHeatmap && findings.map((finding, i) => (
-                <div
-                  key={i}
-                  className="absolute rounded-sm border-2 transition-opacity"
-                  style={{
-                    left: `${finding.bbox.x * 100}%`,
-                    top: `${finding.bbox.y * 100}%`,
-                    width: `${finding.bbox.width * 100}%`,
-                    height: `${finding.bbox.height * 100}%`,
-                    borderColor: BOX_COLORS[i % BOX_COLORS.length],
-                    opacity: highlighted === null || highlighted === i ? 1 : 0.25
-                  }}
-                >
-                  <span
-                    className="absolute -top-5 left-0 whitespace-nowrap rounded px-1 text-[10px] font-medium text-white"
-                    style={{ backgroundColor: BOX_COLORS[i % BOX_COLORS.length] }}
-                  >
-                    {finding.class_code}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <button onClick={() => setExpanded(true)} className="block w-full cursor-zoom-in" title="Ampliar">
+              {examImage}
+            </button>
           ) : (
             <p className="text-sm text-slate-400">Não foi possível gerar a pré-visualização da imagem.</p>
           )}
@@ -172,36 +200,25 @@ export default function RadiographDetail() {
             </p>
           )}
 
-          <dl className="mt-4 space-y-1 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Tipo</dt>
-              <dd>{radiograph.file_type}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Tamanho</dt>
-              <dd>{(radiograph.file_size / 1024).toFixed(0)} KB</dd>
-            </div>
-            {radiograph.created_at && (
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Enviada em</dt>
-                <dd>{new Date(radiograph.created_at).toLocaleString("pt-BR")}</dd>
-              </div>
-            )}
-          </dl>
+          <p className="mt-3 text-xs text-slate-400">
+            {radiograph.file_type} · {(radiograph.file_size / 1024).toFixed(0)} KB
+            {radiograph.created_at && ` · enviada em ${new Date(radiograph.created_at).toLocaleString("pt-BR")}`}
+          </p>
         </div>
 
         <div className="space-y-4">
+          {/* Etapa 1: a qualidade vem primeiro e decide se o pré-laudo é liberado. */}
           <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex items-start justify-between gap-2">
               <div>
-                <h2 className="text-sm font-semibold text-slate-700">Análise de IA</h2>
-                <p className="text-xs text-slate-400">Pré-laudo (achados clínicos) + controle de qualidade da imagem</p>
+                <h2 className="text-sm font-semibold text-slate-700">1. Qualidade da imagem</h2>
+                <p className="text-xs text-slate-400">A imagem está boa o suficiente para diagnóstico?</p>
               </div>
               {AI_ENABLED && (
                 <button
                   onClick={handleAnalyze}
                   disabled={analyzing}
-                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                  className="shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   {analyzing ? "Analisando..." : analysis ? "Reanalisar" : "Analisar"}
                 </button>
@@ -210,49 +227,43 @@ export default function RadiographDetail() {
 
             {analyzeError && <p className="text-sm text-red-600">{analyzeError}</p>}
 
-            {!AI_ENABLED && !analysis && (
-              <p className="text-sm text-slate-400">Análise por IA em breve.</p>
-            )}
+            {!AI_ENABLED && !analysis && <p className="text-sm text-slate-400">Análise por IA em breve.</p>}
 
-            {AI_ENABLED && !analysis && !analyzeError && (
+            {AI_ENABLED && !quality && !analyzeError && (
               <p className="text-sm text-slate-400">
-                Nenhuma análise realizada ainda. Clique em "Analisar" para rodar a checagem de
-                adequação técnica e a detecção de achados.
+                Exame ainda não analisado. Clique em "Analisar" para classificar a qualidade e gerar o pré-laudo.
               </p>
             )}
-          </div>
 
-          {analysis && (
-            <>
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-700">Controle de qualidade da imagem</h3>
-                    <p className="text-xs text-slate-400">
-                      Classificador de adequação · a imagem está boa o suficiente para diagnóstico?
+            {quality && (
+              <>
+                <div
+                  className={`rounded-md border p-3 ${
+                    quality.is_adequate ? "border-emerald-200 bg-emerald-50" : "border-red-300 bg-red-50"
+                  }`}
+                >
+                  <p className={`text-lg font-semibold ${quality.is_adequate ? "text-emerald-800" : "text-red-800"}`}>
+                    {quality.is_adequate ? "Adequada" : "Inadequada"}
+                  </p>
+                  <p className="text-sm text-slate-700">
+                    Probabilidade de adequação: <span className="font-medium">{quality.score} / 100</span>
+                  </p>
+                  {!quality.is_adequate && (
+                    <p className="mt-1 text-sm font-medium text-red-800">
+                      Confira a imagem e refaça o exame enquanto o paciente está na clínica.
                     </p>
-                  </div>
-                  <span
-                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
-                      analysis.efficientnet.is_adequate
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-red-200 bg-red-50 text-red-700"
-                    }`}
-                  >
-                    {analysis.efficientnet.is_adequate ? "Adequado" : "Não adequado"}
-                  </span>
+                  )}
                 </div>
 
-                <div className="mb-3 flex items-end gap-1">
-                  <span className="text-3xl font-semibold text-slate-900">{analysis.efficientnet.score}</span>
-                  <span className="pb-1 text-sm text-slate-400">/ 100 · probabilidade de adequação</span>
-                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  Triagem automática: acerta cerca de 78% das classificações e pode errar nos dois sentidos.
+                </p>
 
-                {analysis.efficientnet.image_measurements && (
-                  <details className="text-xs text-slate-500">
+                {quality.image_measurements && (
+                  <details className="mt-2 text-xs text-slate-500">
                     <summary className="cursor-pointer">Medidas técnicas da imagem</summary>
                     <ul className="mt-2 space-y-1">
-                      {analysis.efficientnet.image_measurements.map((measurement) => (
+                      {quality.image_measurements.map((measurement) => (
                         <li key={measurement.key} className="flex justify-between">
                           <span>{measurement.label}</span>
                           <span className="font-medium text-slate-600">{measurement.value}</span>
@@ -265,33 +276,55 @@ export default function RadiographDetail() {
                     </p>
                   </details>
                 )}
+              </>
+            )}
+          </div>
 
-                <p className="mt-3 text-sm text-slate-600">{analysis.efficientnet.recommendation}</p>
+          <ReviewCard radiographId={radiograph.id} review={review} onSaved={setReview} />
+
+          {/* Etapa 2: o pré-laudo só aparece depois da classificação de qualidade. */}
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <h2 className="text-sm font-semibold text-slate-700">
+              2. Pré-laudo{preReportOpen && findingsAvailable ? ` · ${detected.length} achado(s)` : ""}
+            </h2>
+            <p className="mb-3 text-xs text-slate-400">Achados detectados pela IA, marcados na própria imagem.</p>
+
+            {!quality ? (
+              <p className="text-sm text-slate-400">Disponível depois da classificação de qualidade (etapa 1).</p>
+            ) : !findingsAvailable ? (
+              <p className="text-sm text-slate-400">
+                Esta radiografia ainda não foi avaliada quanto a achados clínicos. Clique em "Reanalisar".
+              </p>
+            ) : !preReportOpen ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-medium">Pré-laudo não liberado: a imagem foi classificada como inadequada.</p>
+                <p className="mt-1">
+                  Achados detectados numa imagem inadequada são pouco confiáveis. O indicado é refazer o exame.
+                </p>
+                <button onClick={() => setOpenAnyway(true)} className="mt-2 text-xs font-medium underline">
+                  Ver o pré-laudo mesmo assim
+                </button>
               </div>
-
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
-                <h3 className="text-sm font-semibold text-slate-700">
-                  Pré-laudo · achados clínicos{findingsAvailable ? ` (${findings.length})` : ""}
-                </h3>
-                <p className="mb-3 text-xs text-slate-400">YOLOv8 · o que foi encontrado e onde, na própria imagem</p>
-
-                {!findingsAvailable ? (
-                  <p className="text-sm text-slate-400">
-                    Esta radiografia ainda não foi avaliada quanto a achados clínicos. Clique em
-                    "Reanalisar" para rodar a detecção.
+            ) : (
+              <>
+                {!qualityOk && (
+                  <p className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                    Imagem classificada como inadequada: leia estes achados com cautela.
                   </p>
-                ) : findings.length === 0 ? (
+                )}
+
+                {detected.length === 0 ? (
                   <p className="text-sm text-slate-400">Nenhum achado detectado nesta radiografia.</p>
                 ) : (
                   <ul className="space-y-2">
-                    {findings.map((finding, i) => (
+                    {detected.map((finding, i) => (
                       <li
                         key={i}
                         onMouseEnter={() => setHighlighted(i)}
                         onMouseLeave={() => setHighlighted(null)}
                         className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2 text-sm hover:bg-slate-50"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span
                             className="h-2.5 w-2.5 shrink-0 rounded-full"
                             style={{ backgroundColor: BOX_COLORS[i % BOX_COLORS.length] }}
@@ -312,18 +345,33 @@ export default function RadiographDetail() {
                     ))}
                   </ul>
                 )}
-              </div>
 
-              <p className="text-xs text-slate-400">
-                Ferramenta de apoio ao diagnóstico. Os resultados não substituem a avaliação de um
-                profissional habilitado.
-              </p>
-            </>
-          )}
-
-          <ReviewCard radiographId={radiograph.id} review={review} onSaved={setReview} />
+                <p className="mt-3 text-xs text-slate-400">
+                  Ferramenta de apoio ao diagnóstico. Os resultados não substituem a avaliação de um
+                  profissional habilitado.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {expanded && imageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setExpanded(false)}
+        >
+          <div className="relative max-h-full w-full max-w-[min(100%,170vh)]" onClick={(e) => e.stopPropagation()}>
+            {examImage}
+          </div>
+          <button
+            onClick={() => setExpanded(false)}
+            className="absolute right-4 top-4 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-800"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
     </div>
   );
 }

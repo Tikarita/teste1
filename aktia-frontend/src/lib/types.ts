@@ -302,3 +302,21 @@ export interface ProfessionalProfile {
   review: ReviewStats;
   clinic_rejection_rate: number | null;
 }
+
+// --- Avisos em tempo real (/notifications) -----------------------------------
+
+export interface NotificationItem {
+  id: string;
+  kind: string;
+  title: string;
+  message: string;
+  radiograph_id: string | null;
+  created_at: string;
+  /** Quando o profissional marcou "Ciente"; null = ainda não lido. */
+  read_at: string | null;
+}
+
+export interface NotificationList {
+  unread_count: number;
+  items: NotificationItem[];
+}

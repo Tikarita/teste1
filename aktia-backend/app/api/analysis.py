@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.schemas.reviews import Review, ReviewCreate
-from app.services import review_service
+from app.services import notification_service, review_service
 from app.services.image_service import validate_image
 from app.services.supabase_service import supabase
 
@@ -235,6 +235,16 @@ def analyze_radiograph_by_id(radiograph_id: str, current=Depends(get_current_use
                 status_code=500,
                 detail=f"A análise foi concluída, mas não pôde ser salva: {e}"
             )
+
+        # Aviso em tempo real: aparece na tela de quem está com o paciente.
+        if not quality["is_adequate"]:
+            try:
+                notification_service.notify_inadequate_exam(radiograph, quality, current)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"A análise foi salva, mas o aviso de exame inadequado não pôde ser gerado: {e}"
+                )
 
         return {
             "data": result

@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useClinics } from "../context/ClinicContext";
-import UploadFeedback, { type UploadOutcome } from "../components/UploadFeedback";
+import { REFRESH_NOTIFICATIONS_EVENT } from "../components/NotificationCenter";
+import { useToasts } from "../context/ToastContext";
 import type { Radiograph, StaffMember } from "../lib/types";
 
 // VITE_ENABLE_AI=false desliga a análise automática logo após o envio.
@@ -21,7 +22,7 @@ export default function Radiographs() {
   const [professionalId, setProfessionalId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState<UploadOutcome | null>(null);
+  const { showToast, dismissToast } = useToasts();
 
   function loadRadiographs() {
     if (!selectedClinicId) {
@@ -59,30 +60,43 @@ export default function Radiographs() {
       .catch(() => setStaff([]));
   }, [selectedClinicId, user?.id]);
 
-  // Analisa a radiografia recém-enviada e mostra o retorno na hora, enquanto o
-  // paciente ainda está na clínica.
+  // Analisa a radiografia recém-enviada e avisa o resultado no canto da tela,
+  // enquanto o paciente ainda está na clínica.
   async function analyzeUploaded(radiograph: Radiograph) {
-    setOutcome({ radiograph, status: "analyzing" });
+    const key = `upload-${radiograph.id}`;
+    showToast({
+      key,
+      tone: "info",
+      title: "Analisando a radiografia...",
+      message: `${radiograph.file_name} · leva alguns segundos.`
+    });
 
     try {
-      const [analysis, detail] = await Promise.all([
-        api.analyzeRadiograph(radiograph.id),
-        api.getRadiograph(radiograph.id).catch(() => null)
-      ]);
-      const url = detail?.signed_url?.signedUrl ?? detail?.signed_url?.signedURL ?? null;
-
-      setOutcome({
-        radiograph,
-        status: "done",
-        analysis: analysis.data,
-        imageUrl: url && url.startsWith("http") ? url : null
-      });
+      const analysis = await api.analyzeRadiograph(radiograph.id);
       loadRadiographs();
+
+      if (analysis.data.efficientnet.is_adequate) {
+        showToast({
+          key,
+          tone: "success",
+          title: "Imagem adequada",
+          message: `${radiograph.file_name} · a IA liberou o pré-laudo.`,
+          link: { to: `/radiografias/${radiograph.id}`, label: "Ver pré-laudo" },
+          autoCloseMs: 12_000
+        });
+      } else {
+        // O alerta de exame inadequado vem do backend como aviso (o mesmo que
+        // chega ao profissional responsável): só pede a checagem imediata.
+        dismissToast(key);
+        window.dispatchEvent(new Event(REFRESH_NOTIFICATIONS_EVENT));
+      }
     } catch (err) {
-      setOutcome({
-        radiograph,
-        status: "error",
-        error: err instanceof ApiError ? err.message : "erro inesperado."
+      showToast({
+        key,
+        tone: "danger",
+        title: "A radiografia foi enviada, mas não pôde ser analisada",
+        message: err instanceof ApiError ? err.message : "Erro inesperado.",
+        link: { to: `/radiografias/${radiograph.id}`, label: "Abrir exame" }
       });
     }
   }
@@ -125,8 +139,6 @@ export default function Radiographs() {
         <h1 className="text-xl font-semibold text-slate-900">Radiografias</h1>
         <p className="text-sm text-slate-500">Envie e acompanhe as radiografias da clínica selecionada.</p>
       </div>
-
-      {outcome && <UploadFeedback outcome={outcome} onDismiss={() => setOutcome(null)} />}
 
       <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Enviar radiografia</h2>

@@ -1,5 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { ToastProvider } from "../context/ToastContext";
+import NotificationCenter from "./NotificationCenter";
 
 const navItems = [
   { to: "/", label: "Dashboard", end: true },
@@ -18,6 +20,7 @@ export default function Layout() {
   }
 
   return (
+    <ToastProvider>
     <div className="min-h-screen flex">
       <aside className="w-60 shrink-0 bg-slate-900 text-slate-100 flex flex-col print:hidden">
         <div className="px-5 py-4 border-b border-slate-800">
@@ -54,6 +57,8 @@ export default function Layout() {
           <span className="text-sm text-slate-500">{clinic?.name ?? "Clínica"}</span>
 
           <div className="flex items-center gap-4">
+            <NotificationCenter />
+
             {user && (
               <div className="text-right leading-tight">
                 <p className="text-sm font-medium text-slate-700">{user.full_name}</p>
@@ -75,5 +80,6 @@ export default function Layout() {
         </main>
       </div>
     </div>
+    </ToastProvider>
   );
 }

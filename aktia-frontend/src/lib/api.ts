@@ -3,6 +3,7 @@ import type {
   AuthSession,
   Clinic,
   ClinicalFindingsStats,
+  NotificationList,
   ProfessionalProfile,
   ProfessionalsStats,
   QualityFindingsStats,
@@ -158,6 +159,10 @@ export const api = {
   statsProfessionalProfile: (id: string, query: StatsQuery) =>
     request<ProfessionalProfile>(statsPath(`professionals/${id}`, query)),
   statsReviews: (query: StatsQuery) => request<ReviewStatsResponse>(statsPath("reviews", query)),
+
+  listNotifications: () => request<NotificationList>("/notifications/"),
+  markNotificationRead: (id: string) =>
+    request<NotificationList>(`/notifications/${id}/read`, { method: "POST" }),
 
   listQualityReports: () => request<ReportSummary[]>("/reports/quality"),
   getQualityReport: (id: string) => request<QualityReport>(`/reports/quality/${id}`),

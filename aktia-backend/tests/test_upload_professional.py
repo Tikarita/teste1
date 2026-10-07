@@ -86,6 +86,7 @@ class FakeSupabase:
         self.tables: dict[str, list[dict]] = {"profiles": [], "radiographs": []}
         self.files: dict[str, bytes] = {}
         self.rpc_calls: list[tuple[str, dict]] = []
+        self.notifications: list[dict] = []
         self.storage = types.SimpleNamespace(from_=lambda _bucket: FakeBucket(self.files))
 
     def table(self, name):
@@ -102,6 +103,8 @@ def fake_supabase(monkeypatch):
     monkeypatch.setattr(analysis, "supabase", fake)
     # A revisão humana tem testes próprios (test_reviews.py); aqui não há nenhuma.
     monkeypatch.setattr(analysis.review_service, "_current_review_row", lambda *_: None)
+    # Os avisos têm testes próprios (test_notifications.py); aqui só se confere que são pedidos.
+    monkeypatch.setattr(analysis.notification_service, "_insert_notifications", fake.notifications.extend)
     return fake
 
 
@@ -296,3 +299,27 @@ def test_analyze_refuses_a_radiograph_from_another_clinic(client, login, clinics
 
     assert response.status_code == 404
     assert fake_supabase.rpc_calls == []
+
+
+def test_inadequate_analysis_notifies_professional_and_requester(client, login, clinics, fake_supabase, stub_model):
+    clinic_a, (user, colleague) = clinics["a"]
+    login(clinic_a, user)
+    radiograph_id = upload(client, professional_id=colleague).json()["data"][0]["id"]
+
+    client.post(f"/api/v1/analysis/{radiograph_id}/analyze")
+
+    assert {n["recipient_id"] for n in fake_supabase.notifications} == {user, colleague}
+    assert {n["radiograph_id"] for n in fake_supabase.notifications} == {radiograph_id}
+    assert all(n["clinic_id"] == clinic_a and n["kind"] == "inadequate_exam" for n in fake_supabase.notifications)
+
+
+def test_adequate_analysis_sends_no_notification(client, login, clinics, fake_supabase, stub_model):
+    stub_model["efficientnet"]["is_adequate"] = True
+    clinic_a, (user, _) = clinics["a"]
+    login(clinic_a, user)
+    radiograph_id = upload(client).json()["data"][0]["id"]
+
+    response = client.post(f"/api/v1/analysis/{radiograph_id}/analyze")
+
+    assert response.status_code == 200
+    assert fake_supabase.notifications == []
