@@ -185,7 +185,7 @@ def rpc_on_database(db, monkeypatch):
 
     def staff(clinic_id: str) -> list[dict]:
         return db.execute(
-            "select id, full_name from profiles where clinic_id = %s", (clinic_id,)
+            "select id, full_name, role from profiles where clinic_id = %s", (clinic_id,)
         ).fetchall()
 
     monkeypatch.setattr(quality_stats, "_rpc", run)

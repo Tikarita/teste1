@@ -15,7 +15,8 @@ from app.schemas.stats import (
     SummaryResponse,
 )
 from app.schemas.reviews import ReviewStatsResponse
-from app.services import quality_stats, review_service
+from app.services import professional_service, quality_stats, review_service
+from app.services.professional_service import ProfessionalProfile
 
 
 router = APIRouter(
@@ -91,3 +92,14 @@ def reviews(
         filters={"professional_id": filters.professional_id, "status": None},
         min_sample_size=quality_stats.settings.STATS_MIN_SAMPLE_SIZE
     )
+
+
+# O parâmetro de rota não pode se chamar professional_id: esse nome já é o
+# filtro de query de get_filters.
+@router.get("/professionals/{member_id}", response_model=ProfessionalProfile)
+def professional_profile(
+    member_id: UUID,
+    filters: quality_stats.StatsFilters = Depends(get_filters),
+    current=Depends(get_current_user)
+):
+    return professional_service.get_profile(current, member_id, filters)

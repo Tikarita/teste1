@@ -3,6 +3,7 @@ import type {
   AuthSession,
   Clinic,
   ClinicalFindingsStats,
+  ProfessionalProfile,
   ProfessionalsStats,
   QualityFindingsStats,
   QualityHistory,
@@ -154,6 +155,8 @@ export const api = {
   statsClinicalFindings: (query: StatsQuery) =>
     request<ClinicalFindingsStats>(statsPath("clinical-findings", query)),
 
+  statsProfessionalProfile: (id: string, query: StatsQuery) =>
+    request<ProfessionalProfile>(statsPath(`professionals/${id}`, query)),
   statsReviews: (query: StatsQuery) => request<ReviewStatsResponse>(statsPath("reviews", query)),
 
   listQualityReports: () => request<ReportSummary[]>("/reports/quality"),

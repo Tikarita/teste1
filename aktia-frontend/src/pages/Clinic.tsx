@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useClinics } from "../context/ClinicContext";
 import { useAuth } from "../context/AuthContext";
@@ -260,7 +261,15 @@ export default function Clinic() {
                   {professionalStats.professionals.map((row) => (
                     <tr key={row.professional_id ?? "sem-profissional"}>
                       <td className="py-2 font-medium">
-                        {row.full_name ?? <span className="font-normal text-slate-500">Sem profissional informado</span>}
+                        {row.professional_id === null ? (
+                          <span className="font-normal text-slate-500">Sem profissional informado</span>
+                        ) : isAdmin || user?.role === "manager" || row.professional_id === user?.id ? (
+                          <Link to={`/profissionais/${row.professional_id}`} className="hover:underline">
+                            {row.full_name ?? "Profissional"}
+                          </Link>
+                        ) : (
+                          row.full_name
+                        )}
                       </td>
                       <td className="py-2 text-slate-500">{row.total}</td>
                       <td className="py-2">

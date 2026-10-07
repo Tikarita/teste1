@@ -314,11 +314,11 @@ def get_findings(clinic_id: str, filters: StatsFilters) -> FindingsResponse:
 
 
 def _clinic_staff(clinic_id: str) -> list[dict]:
-    """Profissionais da clínica (id e nome), para listar também quem ainda não tem análise."""
+    """Profissionais da clínica, para listar também quem ainda não tem análise."""
     response = (
         supabase
         .table("profiles")
-        .select("id, full_name")
+        .select("id, full_name, role")
         .eq("clinic_id", str(clinic_id))
         .execute()
     )

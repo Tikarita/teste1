@@ -266,3 +266,22 @@ export interface ReviewStats {
 export interface ReviewStatsResponse extends ReviewStats {
   min_sample_size: number;
 }
+
+// --- Perfil por profissional (/stats/professionals/{id}) ---------------------
+
+export interface ProfessionalProfile {
+  professional: { id: string; full_name: string | null; role: string | null };
+  min_sample_size: number;
+  summary: PeriodSummary;
+  previous: PeriodSummary;
+  /** Período atual menos o anterior. */
+  comparison: QualitySummary["comparison"];
+  clinic_summary: PeriodSummary;
+  /** Profissional menos a clínica. */
+  versus_clinic: QualitySummary["comparison"];
+  history_granularity: "day" | "week";
+  history: { bucket: string; avg_score: number | null; total: number }[] | null;
+  quality_findings: { category: string; label: string; count: number; percentage: number }[] | null;
+  review: ReviewStats;
+  clinic_rejection_rate: number | null;
+}

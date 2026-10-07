@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import Clinic from "./pages/Clinic";
 import Login from "./pages/Login";
+import ProfessionalProfile from "./pages/ProfessionalProfile";
 import Radiographs from "./pages/Radiographs";
 import Reports from "./pages/Reports";
 import ReportView from "./pages/ReportView";
@@ -18,6 +19,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="clinica" element={<Clinic />} />
+          <Route path="profissionais/:id" element={<ProfessionalProfile />} />
           <Route path="radiografias" element={<Radiographs />} />
           <Route path="radiografias/:id" element={<RadiographDetail />} />
           <Route path="relatorios" element={<Reports />} />
