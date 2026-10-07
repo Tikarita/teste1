@@ -206,6 +206,7 @@ def run_efficientnet_adequacy(image_bytes: bytes) -> dict:
         "is_adequate": model_result["is_adequate"],
         "score": model_result["score"],
         "confidence": model_result["confidence"],
+        "explanation": model_result["explanation"],
         "criteria": criteria,
         "recommendation": recommendation
     }

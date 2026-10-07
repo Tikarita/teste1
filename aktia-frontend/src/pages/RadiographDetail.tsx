@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
+import Heatmap from "../components/Heatmap";
 import ReviewCard from "../components/ReviewCard";
 import type { AnalysisResult, QualityStatus, Radiograph, Review } from "../lib/types";
 
@@ -42,6 +43,9 @@ export default function RadiographDetail() {
   // Achados só aparecem quando vieram de um modelo real (ver YoloResult.available).
   const findings = analysis?.yolo.available ? analysis.yolo.findings : [];
   const findingsAvailable = analysis?.yolo.available === true;
+
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const explanation = analysis?.efficientnet.explanation ?? null;
 
   function load() {
     if (!id) return;
@@ -116,13 +120,30 @@ export default function RadiographDetail() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Imagem</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">Imagem</h2>
+            {explanation && (
+              <button
+                onClick={() => setShowHeatmap((current) => !current)}
+                className={`rounded-md border px-3 py-1 text-xs font-medium ${
+                  showHeatmap
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {showHeatmap ? "Ocultar mapa de calor" : "Por que a IA decidiu assim?"}
+              </button>
+            )}
+          </div>
 
           {imageUrl ? (
             <div className="relative inline-block w-full">
               <img src={imageUrl} alt={radiograph.file_name} className="w-full rounded-md object-contain" />
 
-              {findings.map((finding, i) => (
+              {showHeatmap && explanation && <Heatmap grid={explanation.grid} />}
+
+              {/* Com o mapa de calor ligado, as caixas de achados saem para não poluir a leitura. */}
+              {!showHeatmap && findings.map((finding, i) => (
                 <div
                   key={i}
                   className="absolute rounded-sm border-2 transition-opacity"
@@ -146,6 +167,21 @@ export default function RadiographDetail() {
             </div>
           ) : (
             <p className="text-sm text-slate-400">Não foi possível gerar a pré-visualização da imagem.</p>
+          )}
+
+          {showHeatmap && explanation && (
+            <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              As áreas em vermelho foram as que mais pesaram para a IA classificar esta imagem como{" "}
+              <span className="font-medium">{explanation.target_class}</span>; as amarelas pesaram menos. É uma
+              aproximação de baixa resolução do que influenciou o modelo, não a marcação de um defeito: use
+              para conferir se a decisão se apoiou numa região que faz sentido.
+            </p>
+          )}
+
+          {analysis && !explanation && (
+            <p className="mt-3 text-xs text-slate-400">
+              Esta análise é anterior ao mapa de calor. Clique em "Reanalisar" para gerá-lo.
+            </p>
           )}
 
           <dl className="mt-4 space-y-1 text-sm">

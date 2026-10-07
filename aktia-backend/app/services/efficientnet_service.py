@@ -82,13 +82,18 @@ def classify_adequacy(image_bytes: bytes) -> dict:
     para "inadequado" — ele deixa passar parte das imagens ruins.
     """
     classes = _get_classes()
+    model = _get_model()
 
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
     tensor = _TRANSFORM(image).unsqueeze(0).to(DEVICE)
 
-    with torch.no_grad():
-        probabilities = torch.softmax(_get_model()(tensor)[0], dim=0).cpu().tolist()
+    # Mesmo cálculo de model(tensor), aberto em etapas para guardar o último
+    # mapa de ativações, de onde sai a explicação visual.
+    activations = model.features(tensor)
+    activations.retain_grad()
+    logits = model.classifier(torch.flatten(model.avgpool(activations), 1))[0]
 
+    probabilities = torch.softmax(logits.detach(), dim=0).cpu().tolist()
     predicted = max(range(len(classes)), key=lambda i: probabilities[i])
     label = classes[predicted]
 
@@ -101,4 +106,35 @@ def classify_adequacy(image_bytes: bytes) -> dict:
         "probabilities": {
             name: round(probability, 4) for name, probability in zip(classes, probabilities)
         },
+        "explanation": _grad_cam(model, activations, logits, predicted, label),
+    }
+
+
+def _grad_cam(model: nn.Module, activations: torch.Tensor, logits: torch.Tensor, target: int, label: str) -> dict:
+    """
+    Grad-CAM da classe escolhida: uma grade (16x16 para entrada de 512 px)
+    com valores de 0 a 1 indicando quanto cada região da imagem puxou a
+    decisão do modelo para essa classe. A grade cobre a imagem inteira, na
+    mesma proporção em que ela foi redimensionada para a rede.
+
+    É uma aproximação de baixa resolução do que influenciou o modelo, não
+    uma marcação de defeito: serve para o profissional conferir se a decisão
+    se apoiou numa região que faz sentido.
+    """
+    model.zero_grad(set_to_none=True)
+    logits[target].backward()
+
+    # Peso de cada canal = média do gradiente; o mapa é a soma ponderada das
+    # ativações, mantendo só o que contribui a favor da classe.
+    weights = activations.grad.mean(dim=(2, 3), keepdim=True)
+    cam = torch.relu((weights * activations.detach()).sum(dim=1))[0]
+
+    peak = float(cam.max())
+    if peak > 0:
+        cam = cam / peak
+
+    return {
+        "method": "grad-cam",
+        "target_class": label,
+        "grid": [[round(float(value), 3) for value in row] for row in cam.cpu()],
     }

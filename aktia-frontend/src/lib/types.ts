@@ -73,6 +73,15 @@ export interface EfficientNetResult {
   score: number;
   /** Probabilidade (0-1) da classe escolhida. Ausente em análises feitas antes do modelo supervisionado. */
   confidence?: number;
+  /**
+   * Grad-CAM da classe escolhida: grade de valores 0-1 cobrindo a imagem
+   * inteira. Ausente em análises feitas antes de a explicação existir.
+   */
+  explanation?: {
+    method: string;
+    target_class: string;
+    grid: number[][];
+  };
   criteria: QualityCriterion[];
   recommendation: string;
 }
