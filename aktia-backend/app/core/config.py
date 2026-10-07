@@ -36,5 +36,12 @@ class Settings:
 
     MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024
 
+    # Abaixo desse número de análises no período, as estatísticas devolvem
+    # null + insufficient_data em vez de uma média que não significa nada.
+    STATS_MIN_SAMPLE_SIZE: int = int(os.getenv("STATS_MIN_SAMPLE_SIZE", "5"))
+
+    # Fuso usado para definir onde começa e termina cada dia nas estatísticas.
+    STATS_TIMEZONE: str = os.getenv("STATS_TIMEZONE", "America/Sao_Paulo")
+
 
 settings = Settings()

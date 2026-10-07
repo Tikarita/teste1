@@ -1,7 +1,8 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from app.api.auth import get_current_user
 from app.core.config import settings
 from app.services.image_service import validate_image
 from app.services.supabase_service import supabase
@@ -12,12 +13,63 @@ router = APIRouter(
 )
 
 
+def _get_clinic_radiograph(radiograph_id: str, clinic_id: str) -> dict:
+    """Busca a radiografia só dentro da clínica do usuário: a de outra clínica responde 404."""
+    response = (
+        supabase
+        .table("radiographs")
+        .select("*")
+        .eq("id", radiograph_id)
+        .eq("clinic_id", clinic_id)
+        .execute()
+    )
+
+    if not response.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Radiografia não encontrada"
+        )
+
+    return response.data[0]
+
+
+def _resolve_professional_id(professional_id: UUID | None, current: dict) -> str:
+    """
+    Profissional responsável pela captura. Sem valor informado, é o próprio
+    usuário logado; quando informado, precisa ser da mesma clínica.
+    """
+    if professional_id is None or str(professional_id) == str(current["profile"]["id"]):
+        return str(current["profile"]["id"])
+
+    response = (
+        supabase
+        .table("profiles")
+        .select("id")
+        .eq("id", str(professional_id))
+        .eq("clinic_id", current["clinic"]["id"])
+        .limit(1)
+        .execute()
+    )
+
+    if not response.data:
+        raise HTTPException(
+            status_code=400,
+            detail="O profissional informado não pertence a esta clínica."
+        )
+
+    return str(professional_id)
+
+
 @router.post("/upload")
 async def upload_radiograph(
-    clinic_id: str = Form(...),
-    uploaded_by: str = Form(...),
-    file: UploadFile = File(...)
+    professional_id: UUID | None = Form(None),
+    file: UploadFile = File(...),
+    current=Depends(get_current_user)
 ):
+    clinic_id = current["clinic"]["id"]
+    uploaded_by = current["profile"]["id"]
+    professional_id = _resolve_professional_id(professional_id, current)
+
     if file.content_type not in settings.ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=400,
@@ -43,6 +95,7 @@ async def upload_radiograph(
         radiograph_data = {
             "clinic_id": clinic_id,
             "uploaded_by": uploaded_by,
+            "professional_id": professional_id,
             "file_name": file.filename,
             "file_path": unique_file_name,
             "file_type": file.content_type,
@@ -72,7 +125,13 @@ async def upload_radiograph(
 
 
 @router.get("/clinic/{clinic_id}")
-def get_clinic_radiographs(clinic_id: str):
+def get_clinic_radiographs(clinic_id: str, current=Depends(get_current_user)):
+    if clinic_id != str(current["clinic"]["id"]):
+        raise HTTPException(
+            status_code=403,
+            detail="Você não tem acesso às radiografias desta clínica."
+        )
+
     try:
         response = (
             supabase
@@ -95,23 +154,9 @@ def get_clinic_radiographs(clinic_id: str):
 
 
 @router.get("/{radiograph_id}")
-def get_radiograph(radiograph_id: str):
+def get_radiograph(radiograph_id: str, current=Depends(get_current_user)):
     try:
-        response = (
-            supabase
-            .table("radiographs")
-            .select("*")
-            .eq("id", radiograph_id)
-            .execute()
-        )
-
-        if not response.data:
-            raise HTTPException(
-                status_code=404,
-                detail="Radiografia não encontrada"
-            )
-
-        radiograph = response.data[0]
+        radiograph = _get_clinic_radiograph(radiograph_id, current["clinic"]["id"])
 
         signed_url_response = (
             supabase
@@ -139,7 +184,7 @@ def get_radiograph(radiograph_id: str):
 
 
 @router.post("/{radiograph_id}/analyze")
-def analyze_radiograph_by_id(radiograph_id: str):
+def analyze_radiograph_by_id(radiograph_id: str, current=Depends(get_current_user)):
     if not settings.ENABLE_AI:
         raise HTTPException(
             status_code=503,
@@ -150,34 +195,43 @@ def analyze_radiograph_by_id(radiograph_id: str):
     from app.services.analysis_service import analyze_radiograph
 
     try:
-        response = (
-            supabase
-            .table("radiographs")
-            .select("*")
-            .eq("id", radiograph_id)
-            .execute()
-        )
-
-        if not response.data:
-            raise HTTPException(
-                status_code=404,
-                detail="Radiografia não encontrada"
-            )
-
-        radiograph = response.data[0]
+        radiograph = _get_clinic_radiograph(radiograph_id, current["clinic"]["id"])
 
         image_bytes = supabase.storage.from_("radiographs").download(
             radiograph["file_path"]
         )
 
         result = analyze_radiograph(image_bytes)
+        quality = result["efficientnet"]
 
+        # O modelo atual só decide adequado/inadequado, então o status geral
+        # não tem "attention" por enquanto.
         try:
-            supabase.table("radiographs").update({
-                "analysis_result": result
-            }).eq("id", radiograph_id).execute()
-        except Exception:
-            pass
+            supabase.rpc("record_analysis", {
+                "p_radiograph_id": radiograph_id,
+                "p_clinic_id": current["clinic"]["id"],
+                "p_status": "approved" if quality["is_adequate"] else "rejected",
+                "p_quality_score": quality["score"],
+                "p_is_adequate": quality["is_adequate"],
+                "p_model_version": quality["model"],
+                "p_recommendation": quality["recommendation"],
+                "p_result": result,
+                # Critérios "pending" não foram avaliados, então não viram achado.
+                "p_findings": [
+                    {
+                        "category": criterion["category"],
+                        "status": criterion["status"],
+                        "score": criterion["score"]
+                    }
+                    for criterion in quality["criteria"]
+                    if criterion["status"] != "pending"
+                ]
+            }).execute()
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"A análise foi concluída, mas não pôde ser salva: {e}"
+            )
 
         return {
             "data": result
@@ -194,23 +248,9 @@ def analyze_radiograph_by_id(radiograph_id: str):
 
 
 @router.delete("/{radiograph_id}")
-def delete_radiograph(radiograph_id: str):
+def delete_radiograph(radiograph_id: str, current=Depends(get_current_user)):
     try:
-        response = (
-            supabase
-            .table("radiographs")
-            .select("*")
-            .eq("id", radiograph_id)
-            .execute()
-        )
-
-        if not response.data:
-            raise HTTPException(
-                status_code=404,
-                detail="Radiografia não encontrada"
-            )
-
-        radiograph = response.data[0]
+        radiograph = _get_clinic_radiograph(radiograph_id, current["clinic"]["id"])
 
         supabase.storage.from_("radiographs").remove([
             radiograph["file_path"]

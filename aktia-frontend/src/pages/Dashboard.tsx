@@ -1,20 +1,41 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClinics } from "../context/ClinicContext";
-import type { Radiograph, StaffMember } from "../lib/types";
+import type {
+  ClinicalFindingsStats,
+  QualityFindingsStats,
+  QualityHistory,
+  QualitySummary,
+  Radiograph,
+  StatsPeriod
+} from "../lib/types";
 
 type ApiStatus = "checking" | "online" | "offline";
 
+const PERIODS: { value: StatsPeriod; label: string }[] = [
+  { value: "7", label: "7 dias" },
+  { value: "30", label: "30 dias" },
+  { value: "90", label: "90 dias" }
+];
+
+// Todos os números desta tela vêm prontos do backend (/stats/*). Aqui só há
+// formatação: nada de média, taxa ou contagem calculada no navegador.
 export default function Dashboard() {
   const { clinics, selectedClinicId } = useClinics();
   const activeClinic = clinics.find((c) => c.id === selectedClinicId) ?? null;
 
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [dbStatus, setDbStatus] = useState<ApiStatus>("checking");
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [radiographs, setRadiographs] = useState<Radiograph[]>([]);
+
+  const [period, setPeriod] = useState<StatsPeriod>("30");
+  const [summary, setSummary] = useState<QualitySummary | null>(null);
+  const [history, setHistory] = useState<QualityHistory | null>(null);
+  const [qualityFindings, setQualityFindings] = useState<QualityFindingsStats | null>(null);
+  const [clinicalFindings, setClinicalFindings] = useState<ClinicalFindingsStats | null>(null);
+  const [recent, setRecent] = useState<Radiograph[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     api.health().then(() => setApiStatus("online")).catch(() => setApiStatus("offline"));
@@ -23,70 +44,158 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!selectedClinicId) {
-      setStaff([]);
-      setRadiographs([]);
+      setRecent([]);
+      return;
+    }
+
+    // A lista já vem do backend em ordem do mais recente para o mais antigo.
+    api
+      .listRadiographsByClinic(selectedClinicId)
+      .then((res) => setRecent(res.data.slice(0, 6)))
+      .catch(() => setRecent([]));
+  }, [selectedClinicId]);
+
+  useEffect(() => {
+    if (!selectedClinicId) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setStatsError(null);
+
+    // Cada painel falha sozinho: um erro numa estatística não apaga as outras.
+    const orNull = (err: unknown) => {
+      setStatsError(err instanceof Error ? err.message : "Erro ao carregar estatísticas");
+      return null;
+    };
+
     Promise.all([
-      api.listStaffByClinic(selectedClinicId).then((res) => res.data).catch(() => []),
-      api.listRadiographsByClinic(selectedClinicId).then((res) => res.data).catch(() => [])
-    ]).then(([staffData, radiographData]) => {
-      setStaff(staffData);
-      setRadiographs(radiographData);
-      setLoading(false);
-    });
-  }, [selectedClinicId]);
+      api.statsSummary({ period }).catch(orNull),
+      api.statsHistory({ period }).catch(orNull),
+      api.statsFindings({ period }).catch(orNull),
+      api.statsClinicalFindings({ period }).catch(orNull)
+    ])
+      .then(([summaryData, historyData, findingsData, clinicalData]) => {
+        setSummary(summaryData);
+        setHistory(historyData);
+        setQualityFindings(findingsData);
+        setClinicalFindings(clinicalData);
+      })
+      .finally(() => setLoading(false));
+  }, [selectedClinicId, period]);
 
-  const analyzed = radiographs.filter((r) => r.analysis_result);
-  const adequate = analyzed.filter((r) => r.analysis_result?.efficientnet.is_adequate);
-  const needsAttention = analyzed.filter((r) => !r.analysis_result?.efficientnet.is_adequate);
-
-  const findingCounts = new Map<string, { label: string; count: number }>();
-  for (const r of analyzed) {
-    for (const f of r.analysis_result?.yolo.findings ?? []) {
-      const entry = findingCounts.get(f.class_code) ?? { label: f.label, count: 0 };
-      entry.count += 1;
-      findingCounts.set(f.class_code, entry);
-    }
-  }
-  const topFindings = [...findingCounts.entries()]
-    .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, 5);
-
-  const recent = [...radiographs]
-    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
-    .slice(0, 6);
+  const current = summary?.current ?? null;
+  const delta = summary?.comparison.avg_score_delta ?? null;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">
-          {activeClinic ? activeClinic.name : "Dashboard"}
-        </h1>
-        <p className="text-sm text-slate-500">Visão geral dos exames e da qualidade diagnóstica da clínica.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">
+            {activeClinic ? activeClinic.name : "Dashboard"}
+          </h1>
+          <p className="text-sm text-slate-500">Qualidade das radiografias analisadas no período.</p>
+        </div>
+
+        <div className="flex rounded-md border border-slate-200 bg-white p-0.5 text-sm">
+          {PERIODS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setPeriod(option.value)}
+              className={`rounded px-3 py-1 ${
+                period === option.value ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {statsError && <p className="text-sm text-red-600">{statsError}</p>}
+
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Exames enviados" value={radiographs.length} to="/radiografias" />
-        <StatCard label="Adequados para diagnóstico" value={adequate.length} to="/radiografias" tone="good" />
-        <StatCard label="Precisam de atenção" value={needsAttention.length} to="/radiografias" tone="warn" />
-        <StatCard label="Equipe" value={staff.length} to="/clinica" />
+        <StatCard label="Análises no período" value={current ? String(current.total) : "—"} />
+        <StatCard
+          label="Score médio"
+          value={current?.avg_score != null ? current.avg_score.toFixed(1) : "—"}
+          hint={
+            !current
+              ? undefined
+              : current.insufficient_data
+              ? `Dados insuficientes (mínimo de ${summary?.min_sample_size} análises)`
+              : delta != null
+              ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} em relação ao período anterior`
+              : "Sem período anterior para comparar"
+          }
+        />
+        <StatCard
+          label="Adequadas"
+          value={current ? String(current.status_counts.approved) : "—"}
+          hint={current?.status_rates ? `${current.status_rates.approved.toFixed(1)}% das análises` : undefined}
+          tone="good"
+        />
+        <StatCard
+          label="Inadequadas"
+          value={current ? String(current.status_counts.rejected) : "—"}
+          hint={current?.status_rates ? `${current.status_rates.rejected.toFixed(1)}% das análises` : undefined}
+          tone="warn"
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Exames recentes</h2>
-
-          {loading && <p className="text-sm text-slate-400">Carregando...</p>}
-
-          {!loading && recent.length === 0 && (
-            <p className="text-sm text-slate-400">Nenhum exame enviado ainda nesta clínica.</p>
+        <Panel
+          title="Score médio ao longo do tempo"
+          subtitle={history ? (history.granularity === "week" ? "Por semana" : "Por dia") : undefined}
+        >
+          {loading && <Muted>Carregando...</Muted>}
+          {!loading && history?.insufficient_data && <Insufficient min={history.min_sample_size} />}
+          {!loading && history?.points && (
+            <ul className="space-y-1.5">
+              {history.points.map((point) => (
+                <li key={point.bucket} className="flex items-center gap-3 text-sm">
+                  <span className="w-20 shrink-0 text-slate-500">{formatDay(point.bucket)}</span>
+                  <Bar percent={point.avg_score ?? 0} />
+                  <span className="w-24 shrink-0 text-right text-slate-700">
+                    {point.avg_score != null ? point.avg_score.toFixed(1) : "—"}
+                    <span className="ml-1 text-xs text-slate-400">({point.total})</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
+        </Panel>
 
-          {!loading && recent.length > 0 && (
+        <Panel
+          title="Problemas de qualidade mais comuns"
+          subtitle="Critérios em atenção ou reprovados. São métricas de imagem complementares, não a decisão do modelo."
+        >
+          {loading && <Muted>Carregando...</Muted>}
+          {!loading && qualityFindings?.insufficient_data && <Insufficient min={qualityFindings.min_sample_size} />}
+          {!loading && qualityFindings?.items?.length === 0 && (
+            <Muted>Nenhum critério com problema nas análises do período.</Muted>
+          )}
+          {!loading && qualityFindings?.items && qualityFindings.items.length > 0 && (
+            <ul className="space-y-1.5">
+              {qualityFindings.items.map((item) => (
+                <li key={item.category} className="flex items-center gap-3 text-sm">
+                  <span className="w-40 shrink-0 truncate text-slate-600">{item.label}</span>
+                  <Bar percent={item.percentage} />
+                  <span className="w-24 shrink-0 text-right text-slate-700">
+                    {item.percentage.toFixed(1)}%
+                    <span className="ml-1 text-xs text-slate-400">({item.count})</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel title="Exames recentes">
+          {recent.length === 0 && <Muted>Nenhum exame enviado ainda nesta clínica.</Muted>}
+
+          {recent.length > 0 && (
             <ul className="divide-y divide-slate-100">
               {recent.map((r) => (
                 <li key={r.id} className="flex items-center justify-between py-2 text-sm">
@@ -98,10 +207,10 @@ export default function Dashboard() {
                       className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
                         r.analysis_result.efficientnet.is_adequate
                           ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-red-200 bg-red-50 text-red-700"
                       }`}
                     >
-                      {r.analysis_result.efficientnet.is_adequate ? "Adequado" : "Atenção"}
+                      {r.analysis_result.efficientnet.is_adequate ? "Adequado" : "Inadequado"}
                     </span>
                   ) : (
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-500">
@@ -112,31 +221,46 @@ export default function Dashboard() {
               ))}
             </ul>
           )}
-        </div>
+        </Panel>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Achados mais comuns</h2>
-
-          {!loading && topFindings.length === 0 && (
-            <p className="text-sm text-slate-400">
-              Nenhum achado registrado ainda. Analise exames em Radiografias para ver os problemas
-              mais frequentes detectados pelo YOLOv8.
-            </p>
+        <Panel
+          title="Achados clínicos mais frequentes"
+          subtitle={
+            clinicalFindings
+              ? `Detector de achados · ${clinicalFindings.analyses_evaluated} análise(s) avaliada(s) no período`
+              : undefined
+          }
+        >
+          {loading && <Muted>Carregando...</Muted>}
+          {!loading && clinicalFindings?.insufficient_data && (
+            <Insufficient min={clinicalFindings.min_sample_size} what="análises com detecção de achados" />
           )}
-
-          {topFindings.length > 0 && (
+          {!loading && clinicalFindings?.items?.length === 0 && (
+            <Muted>Nenhum achado detectado nas análises do período.</Muted>
+          )}
+          {!loading && clinicalFindings?.items && clinicalFindings.items.length > 0 && (
             <ul className="space-y-2">
-              {topFindings.map(([code, { label, count }]) => (
-                <li key={code} className="flex items-center justify-between text-sm">
-                  <span>
-                    {label} <span className="text-slate-400">({code})</span>
+              {clinicalFindings.items.slice(0, 6).map((item) => (
+                <li key={item.class_code} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    {item.label} <span className="text-slate-400">({item.class_code})</span>
+                    {item.low_reliability && (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                        baixa confiabilidade
+                      </span>
+                    )}
                   </span>
-                  <span className="font-medium text-slate-700">{count}</span>
+                  <span className="text-slate-700">
+                    {item.count}
+                    <span className="ml-1 text-xs text-slate-400">
+                      em {item.percentage_of_analyses.toFixed(1)}% das análises
+                    </span>
+                  </span>
                 </li>
               ))}
             </ul>
           )}
-        </div>
+        </Panel>
       </div>
 
       <div className="flex gap-4 text-xs text-slate-400">
@@ -147,15 +271,50 @@ export default function Dashboard() {
   );
 }
 
+function formatDay(isoDate: string) {
+  const [, month, day] = isoDate.split("-");
+  return `${day}/${month}`;
+}
+
+function Muted({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-slate-400">{children}</p>;
+}
+
+function Insufficient({ min, what = "análises" }: { min: number; what?: string }) {
+  return (
+    <Muted>
+      Dados insuficientes: são necessárias pelo menos {min} {what} no período.
+    </Muted>
+  );
+}
+
+function Bar({ percent }: { percent: number }) {
+  return (
+    <div className="h-2 flex-1 rounded-full bg-slate-100">
+      <div className="h-2 rounded-full bg-slate-700" style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
+    </div>
+  );
+}
+
+function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
+      {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
 function StatCard({
   label,
   value,
-  to,
+  hint,
   tone
 }: {
   label: string;
-  value: number;
-  to: string;
+  value: string;
+  hint?: string;
   tone?: "good" | "warn";
 }) {
   const toneClass =
@@ -166,9 +325,10 @@ function StatCard({
       : "border-slate-200 bg-white";
 
   return (
-    <Link to={to} className={`rounded-lg border p-4 hover:opacity-90 ${toneClass}`}>
+    <div className={`rounded-lg border p-4 ${toneClass}`}>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
-    </Link>
+      {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+    </div>
   );
 }

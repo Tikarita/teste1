@@ -1,18 +1,20 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { useClinics } from "../context/ClinicContext";
 import type { Radiograph, StaffMember } from "../lib/types";
 
 export default function Radiographs() {
   const { clinics, selectedClinicId } = useClinics();
+  const { user } = useAuth();
   const [radiographs, setRadiographs] = useState<Radiograph[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
-  const [uploadedBy, setUploadedBy] = useState("");
+  const [professionalId, setProfessionalId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -45,20 +47,22 @@ export default function Radiographs() {
       .listStaffByClinic(selectedClinicId)
       .then((res) => {
         setStaff(res.data);
-        setUploadedBy((current) => current || res.data[0]?.id || "");
+        setProfessionalId(
+          (current) => current || res.data.find((member) => member.id === user?.id)?.id || res.data[0]?.id || ""
+        );
       })
       .catch(() => setStaff([]));
-  }, [selectedClinicId]);
+  }, [selectedClinicId, user?.id]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!selectedClinicId || !file || !uploadedBy) return;
+    if (!selectedClinicId || !file || !professionalId) return;
 
     setSubmitting(true);
     setFormError(null);
 
     try {
-      await api.uploadRadiograph({ clinic_id: selectedClinicId, uploaded_by: uploadedBy, file });
+      await api.uploadRadiograph({ professional_id: professionalId, file });
       setFile(null);
       loadRadiographs();
     } catch (err) {
@@ -88,10 +92,10 @@ export default function Radiographs() {
 
         <div className="grid gap-3 md:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Enviado por</label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Profissional responsável pela captura</label>
             <select
-              value={uploadedBy}
-              onChange={(e) => setUploadedBy(e.target.value)}
+              value={professionalId}
+              onChange={(e) => setProfessionalId(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               disabled={staff.length === 0}
             >
@@ -120,7 +124,7 @@ export default function Radiographs() {
 
         <button
           type="submit"
-          disabled={submitting || !file || !uploadedBy}
+          disabled={submitting || !file || !professionalId}
           className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {submitting ? "Enviando..." : "Enviar radiografia"}

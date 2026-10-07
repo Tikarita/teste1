@@ -1,11 +1,14 @@
-from uuid import UUID
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
 
-class StaffCreate(BaseModel):
+# Os mesmos valores aceitos pela constraint profiles_role_check do banco.
+StaffRole = Literal["admin", "manager", "user"]
 
-    clinic_id: UUID
+
+class StaffCreate(BaseModel):
+    """A clínica não vem no corpo: é sempre a do administrador autenticado."""
 
     full_name: str = Field(
         min_length=2,
@@ -14,6 +17,4 @@ class StaffCreate(BaseModel):
 
     email: EmailStr
 
-    role: str = Field(
-        default="dentist"
-    )
+    role: StaffRole = "user"

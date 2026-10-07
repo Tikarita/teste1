@@ -8,14 +8,17 @@ python-multipart==0.0.20
 Pillow==11.1.0
 numpy==2.2.1
 truststore==0.10.4
+tzdata==2026.5
 torch==2.14.0
 torchvision==0.29.0
 
 # Processamento de imagem (dataset_qc.py na raiz)
 opencv-python==5.0.0.93
 
-# Scripts de treino/dataset na raiz do repo (não necessários para rodar a API)
+# Detecção de achados (app/services/yolo_service.py) e scripts de treino
 ultralytics==8.4.157
+
+# Scripts de treino/dataset na raiz do repo (não necessários para rodar a API)
 pandas==3.0.6
 scikit-learn==1.9.1
 PyYAML==6.0.3

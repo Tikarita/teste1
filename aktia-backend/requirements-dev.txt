@@ -1,0 +1,8 @@
+# Dependências para rodar os testes (pytest) da API, sem a IA.
+-r requirements-deploy.txt
+pytest==9.1.1
+httpx==0.28.1
+psycopg[binary]==3.3.6
+# Postgres embutido para os testes das agregações SQL. Para usar outro banco,
+# defina TEST_DATABASE_URL (o banco é apagado e recriado pelos testes).
+pgserver==0.1.4

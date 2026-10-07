@@ -37,6 +37,10 @@ export default function RadiographDetail() {
   const [deleting, setDeleting] = useState(false);
   const [highlighted, setHighlighted] = useState<number | null>(null);
 
+  // Achados só aparecem quando vieram de um modelo real (ver YoloResult.available).
+  const findings = analysis?.yolo.available ? analysis.yolo.findings : [];
+  const findingsAvailable = analysis?.yolo.available === true;
+
   function load() {
     if (!id) return;
     setLoading(true);
@@ -115,7 +119,7 @@ export default function RadiographDetail() {
             <div className="relative inline-block w-full">
               <img src={imageUrl} alt={radiograph.file_name} className="w-full rounded-md object-contain" />
 
-              {analysis?.yolo.findings.map((finding, i) => (
+              {findings.map((finding, i) => (
                 <div
                   key={i}
                   className="absolute rounded-sm border-2 transition-opacity"
@@ -185,8 +189,8 @@ export default function RadiographDetail() {
 
             {AI_ENABLED && !analysis && !analyzeError && (
               <p className="text-sm text-slate-400">
-                Nenhuma análise realizada ainda. Clique em "Analisar" para rodar a detecção de
-                achados (YOLOv8) e a checagem de adequação técnica.
+                Nenhuma análise realizada ainda. Clique em "Analisar" para rodar a checagem de
+                adequação técnica e a detecção de achados.
               </p>
             )}
           </div>
@@ -198,7 +202,7 @@ export default function RadiographDetail() {
                   <div>
                     <h3 className="text-sm font-semibold text-slate-700">Controle de qualidade da imagem</h3>
                     <p className="text-xs text-slate-400">
-                      Métricas de imagem (nitidez, contraste, exposição) · a imagem está boa o suficiente para diagnóstico?
+                      Classificador de adequação · a imagem está boa o suficiente para diagnóstico?
                     </p>
                   </div>
                   <span
@@ -214,8 +218,15 @@ export default function RadiographDetail() {
 
                 <div className="mb-3 flex items-end gap-1">
                   <span className="text-3xl font-semibold text-slate-900">{analysis.efficientnet.score}</span>
-                  <span className="pb-1 text-sm text-slate-400">/ 100 índice técnico</span>
+                  <span className="pb-1 text-sm text-slate-400">/ 100 · probabilidade de adequação</span>
                 </div>
+
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Métricas de imagem complementares
+                </p>
+                <p className="mb-2 text-xs text-slate-400">
+                  Calculadas direto da imagem, à parte do classificador: não entram no score e podem divergir dele.
+                </p>
 
                 <ul className="space-y-1.5">
                   {analysis.efficientnet.criteria.map((criterion) => (
@@ -241,15 +252,20 @@ export default function RadiographDetail() {
 
               <div className="rounded-lg border border-slate-200 bg-white p-4">
                 <h3 className="text-sm font-semibold text-slate-700">
-                  Pré-laudo · achados clínicos ({analysis.yolo.findings.length})
+                  Pré-laudo · achados clínicos{findingsAvailable ? ` (${findings.length})` : ""}
                 </h3>
                 <p className="mb-3 text-xs text-slate-400">YOLOv8 · o que foi encontrado e onde, na própria imagem</p>
 
-                {analysis.yolo.findings.length === 0 ? (
+                {!findingsAvailable ? (
+                  <p className="text-sm text-slate-400">
+                    Esta radiografia ainda não foi avaliada quanto a achados clínicos. Clique em
+                    "Reanalisar" para rodar a detecção.
+                  </p>
+                ) : findings.length === 0 ? (
                   <p className="text-sm text-slate-400">Nenhum achado detectado nesta radiografia.</p>
                 ) : (
                   <ul className="space-y-2">
-                    {analysis.yolo.findings.map((finding, i) => (
+                    {findings.map((finding, i) => (
                       <li
                         key={i}
                         onMouseEnter={() => setHighlighted(i)}
@@ -263,6 +279,14 @@ export default function RadiographDetail() {
                           />
                           <span className="font-medium">{finding.label}</span>
                           <span className="text-slate-400">({finding.class_code})</span>
+                          {finding.low_reliability && (
+                            <span
+                              className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                              title="O modelo tem desempenho fraco nesta classe de achado."
+                            >
+                              baixa confiabilidade
+                            </span>
+                          )}
                         </div>
                         <span className="text-slate-500">{Math.round(finding.confidence * 100)}%</span>
                       </li>

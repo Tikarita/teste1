@@ -28,3 +28,12 @@ AKTIA_DATASETS/
 # Dados empacotados para treino no Google Colab (~3GB) - reconstrua com
 # `python package_for_colab.py`, nao precisa versionar
 colab_upload/
+
+# Configuracao local de MCP (contem token de acesso do Supabase)
+.mcp.json
+
+# Estado local do Supabase CLI
+supabase/.temp/
+
+# Pesos de modelos treinados (grandes demais para o Git)
+*.pt

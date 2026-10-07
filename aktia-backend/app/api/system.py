@@ -11,16 +11,16 @@ router = APIRouter(
 
 @router.get("/database-test")
 def database_test():
+    """Confere a conexão com o banco. Rota pública, então não devolve dado nenhum."""
 
-    response = (
+    (
         supabase
         .table("clinics")
-        .select("*")
+        .select("id")
         .limit(1)
         .execute()
     )
 
     return {
-        "message": "Conexão com Supabase funcionando",
-        "data": response.data
+        "message": "Conexão com Supabase funcionando"
     }

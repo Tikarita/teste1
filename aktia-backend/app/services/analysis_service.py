@@ -1,30 +1,11 @@
-import hashlib
 from io import BytesIO
 
 import numpy as np
 from PIL import Image
 
+from app.services import yolo_service
 from app.services.efficientnet_service import classify_adequacy
-
-# Mapeamento provisório dos 14 códigos de classe do dataset de treino
-# (dados/data.yaml). Ainda não há confirmação oficial do significado de
-# cada sigla — revise antes de usar em laudo real.
-CLASS_LABELS = {
-    "IMP": "Implante",
-    "PRR": "Prótese Parcial Removível",
-    "OBT": "Obturação",
-    "END": "Tratamento Endodôntico",
-    "CAR": "Cárie",
-    "BON": "Perda Óssea",
-    "IMT": "Dente Incluso/Impactado",
-    "API": "Lesão Periapical",
-    "ROT": "Raiz Residual",
-    "FUR": "Lesão de Furca",
-    "APS": "Ápice Aberto",
-    "ROR": "Reabsorção Radicular",
-    "ORD": "Aparelho Ortodôntico",
-    "SRD": "Dente Supranumerário"
-}
+from app.services.finding_labels import CLASS_LABELS, LOW_RELIABILITY_CLASSES
 
 QUALITY_CATEGORIES = [
     ("sharpness", "Nitidez"),
@@ -35,10 +16,10 @@ QUALITY_CATEGORIES = [
 ]
 
 # `positioning` e `coverage` exigem entender ONDE está a anatomia na imagem
-# (ex.: achados do YOLO espalhados pelo quadro vs. concentrados num canto).
-# Sem um YOLO treinado (ver run_yolo_detection), não há como calcular isso
-# de verdade — inventar um número aqui passaria confiança clínica que não
-# existe, então esses critérios ficam "pending" até o modelo existir.
+# e o YOLO disponível detecta achados clínicos, não posicionamento. Não há
+# como calcular isso de verdade ainda — inventar um número aqui passaria
+# confiança clínica que não existe, então esses critérios ficam "pending"
+# até existir um modelo para eles.
 PENDING_CATEGORIES = {"positioning", "coverage"}
 
 # Curvas calibradas em 2026-09 a partir dos percentis reais de ~500 imagens
@@ -67,42 +48,28 @@ CLIP_CURVE = [  # fração de pixels saturados (0 ou 255) — quanto menor, melh
 MAX_DIMENSION = 768
 
 
-def _seed_from_bytes(image_bytes: bytes) -> int:
-    return int(hashlib.sha256(image_bytes).hexdigest(), 16)
-
-
 def run_yolo_detection(image_bytes: bytes) -> dict:
     """
-    Placeholder para o modelo YOLOv8 treinado nas 14 classes de
-    dados/data.yaml. O repositório ainda só contém o checkpoint base
-    (yolov8m.pt, pesos COCO) — nenhum treino foi salvo em
-    runs/detect/.../weights/best.pt. Troque esta função por inferência
-    real assim que houver um modelo treinado.
-    """
-    seed = _seed_from_bytes(image_bytes)
-    codes = list(CLASS_LABELS.keys())
-    picked_codes = list(dict.fromkeys([
-        codes[seed % len(codes)],
-        codes[(seed // 7) % len(codes)]
-    ]))
+    Detecção de achados clínicos para o pré-laudo (YOLOv8m, 14 classes de
+    dados/data.yaml — ver yolo_service.detect_findings).
 
-    findings = []
-    for i, code in enumerate(picked_codes):
-        offset = (seed >> (i * 4)) % 100
-        findings.append({
-            "class_code": code,
-            "label": CLASS_LABELS[code],
-            "confidence": round(0.62 + (offset % 35) / 100, 2),
-            "bbox": {
-                "x": round(0.1 + (offset % 40) / 100, 3),
-                "y": round(0.15 + (offset % 30) / 100, 3),
-                "width": round(0.12 + (offset % 10) / 100, 3),
-                "height": round(0.1 + (offset % 8) / 100, 3)
-            }
-        })
+    `available: True` indica que os achados vieram do modelo treinado. Com
+    isso, uma lista vazia passa a significar "nada detectado".
+    """
+    findings = [
+        {
+            "class_code": finding["class_code"],
+            "label": CLASS_LABELS.get(finding["class_code"], finding["class_code"]),
+            "confidence": finding["confidence"],
+            "low_reliability": finding["class_code"] in LOW_RELIABILITY_CLASSES,
+            "bbox": finding["bbox"]
+        }
+        for finding in yolo_service.detect_findings(image_bytes)
+    ]
 
     return {
-        "model": "yolov8-dental-14c",
+        "model": yolo_service.MODEL_NAME,
+        "available": True,
         "findings": findings
     }
 
@@ -174,19 +141,18 @@ def run_efficientnet_adequacy(image_bytes: bytes) -> dict:
     """
     Controle de qualidade técnica da radiografia (adequado/inadequado).
 
-    A decisão (`is_adequate`/`score`/`model`) vem de uma EfficientNet-B0 real
-    (ver efficientnet_service.classify_adequacy): a rede extrai um embedding
-    da imagem e mede a distância a um centróide de "normalidade" calculado
-    offline a partir de radiografias típicas — ainda não é um classificador
-    supervisionado porque não há dataset rotulado adequado/inadequado, mas já
-    é inferência de rede neural de verdade, não um placeholder.
+    A decisão (`is_adequate`/`score`/`confidence`/`model`) vem da
+    EfficientNet-B0 supervisionada, treinada com rótulos adequado/inadequado
+    (ver efficientnet_service.classify_adequacy). `score` é a probabilidade
+    de "adequado" em escala 0-100.
 
-    O detalhamento por critério (nitidez/contraste/artefatos) continua vindo
-    de métricas clássicas de visão computacional, calculadas diretamente da
-    imagem — mantido como informação complementar para o usuário entender
-    possíveis causas do resultado. `positioning` e `coverage` ficam como
-    "pending" (ver PENDING_CATEGORIES) até existir um YOLO treinado para
-    localizar a anatomia na imagem.
+    O detalhamento por critério (nitidez/contraste/artefatos) NÃO vem do
+    modelo, que só decide adequado/inadequado: são métricas clássicas de
+    visão computacional calculadas direto da imagem, mantidas como informação
+    complementar sobre possíveis causas. Elas não entram no `score` e ainda
+    não foram validadas contra os rótulos. `positioning` e `coverage` ficam como
+    "pending" (ver PENDING_CATEGORIES) até existir um modelo que localize a
+    anatomia na imagem.
     """
     gray = _load_grayscale_array(image_bytes)
 
@@ -239,6 +205,7 @@ def run_efficientnet_adequacy(image_bytes: bytes) -> dict:
         "model": model_result["model"],
         "is_adequate": model_result["is_adequate"],
         "score": model_result["score"],
+        "confidence": model_result["confidence"],
         "criteria": criteria,
         "recommendation": recommendation
     }

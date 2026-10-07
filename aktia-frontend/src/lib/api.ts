@@ -1,4 +1,17 @@
-import type { AnalysisResult, AuthSession, Clinic, Radiograph, StaffMember } from "./types";
+import type {
+  AnalysisResult,
+  AuthSession,
+  Clinic,
+  ClinicalFindingsStats,
+  ProfessionalsStats,
+  QualityFindingsStats,
+  QualityHistory,
+  QualitySummary,
+  Radiograph,
+  StaffMember,
+  StaffRole,
+  StatsQuery
+} from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 const ROOT_URL = API_URL.replace(/\/api\/v1\/?$/, "");
@@ -47,9 +60,16 @@ async function request<T>(path: string, options?: RequestInit, baseUrl = API_URL
   return response.json() as Promise<T>;
 }
 
+function statsPath(route: string, query: StatsQuery) {
+  const params = new URLSearchParams({ period: query.period });
+  if (query.professional_id) params.set("professional_id", query.professional_id);
+  if (query.status) params.set("status", query.status);
+  return `/stats/${route}?${params}`;
+}
+
 export const api = {
   health: () => request<{ status: string }>("/health", undefined, ROOT_URL),
-  databaseTest: () => request<{ message: string; data: unknown }>("/system/database-test"),
+  databaseTest: () => request<{ message: string }>("/system/database-test"),
 
   register: (payload: {
     clinic_name: string;
@@ -84,7 +104,8 @@ export const api = {
 
   listStaffByClinic: (clinicId: string) =>
     request<{ data: StaffMember[] }>(`/staff/clinic/${clinicId}`),
-  createStaff: (payload: { clinic_id: string; full_name: string; email: string; role: string }) =>
+  // A clínica do novo funcionário é sempre a do administrador logado.
+  createStaff: (payload: { full_name: string; email: string; role: StaffRole }) =>
     request<{ message: string; data: StaffMember; temporary_password: string }>("/staff/", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -94,10 +115,13 @@ export const api = {
     request<{ data: Radiograph[] }>(`/analysis/clinic/${clinicId}`),
   getRadiograph: (id: string) =>
     request<{ data: Radiograph; signed_url: Record<string, string> }>(`/analysis/${id}`),
-  uploadRadiograph: (payload: { clinic_id: string; uploaded_by: string; file: File }) => {
+  // Clínica e autor do envio vêm da sessão no backend. Sem professional_id, o
+  // responsável pela captura é o próprio usuário logado.
+  uploadRadiograph: (payload: { professional_id?: string; file: File }) => {
     const formData = new FormData();
-    formData.append("clinic_id", payload.clinic_id);
-    formData.append("uploaded_by", payload.uploaded_by);
+    if (payload.professional_id) {
+      formData.append("professional_id", payload.professional_id);
+    }
     formData.append("file", payload.file);
 
     return request<{ message: string; data: Radiograph[] }>("/analysis/upload", {
@@ -108,5 +132,12 @@ export const api = {
   analyzeRadiograph: (id: string) =>
     request<{ data: AnalysisResult }>(`/analysis/${id}/analyze`, { method: "POST" }),
   deleteRadiograph: (id: string) =>
-    request<{ message: string; id: string }>(`/analysis/${id}`, { method: "DELETE" })
+    request<{ message: string; id: string }>(`/analysis/${id}`, { method: "DELETE" }),
+
+  statsSummary: (query: StatsQuery) => request<QualitySummary>(statsPath("summary", query)),
+  statsHistory: (query: StatsQuery) => request<QualityHistory>(statsPath("history", query)),
+  statsFindings: (query: StatsQuery) => request<QualityFindingsStats>(statsPath("findings", query)),
+  statsProfessionals: (query: StatsQuery) => request<ProfessionalsStats>(statsPath("professionals", query)),
+  statsClinicalFindings: (query: StatsQuery) =>
+    request<ClinicalFindingsStats>(statsPath("clinical-findings", query))
 };
