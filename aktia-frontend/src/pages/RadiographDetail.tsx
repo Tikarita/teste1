@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import Heatmap from "../components/Heatmap";
 import ReviewCard from "../components/ReviewCard";
@@ -30,7 +30,9 @@ export default function RadiographDetail() {
   const findings = analysis?.yolo.available ? analysis.yolo.findings : [];
   const findingsAvailable = analysis?.yolo.available === true;
 
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  // ?mapa=1 (link do aviso pós-envio) já abre com o mapa de calor ligado.
+  const [searchParams] = useSearchParams();
+  const [showHeatmap, setShowHeatmap] = useState(searchParams.get("mapa") === "1");
   const explanation = analysis?.efficientnet.explanation ?? null;
 
   function load() {
