@@ -115,16 +115,28 @@ export default function ReportView() {
           )}
         </Section>
 
-        <Section title="5. Problemas de imagem mais frequentes">
-          {data.quality_findings === null ? (
+        <Section title="5. Problemas de imagem (métricas automáticas)">
+          {data.quality_findings_discontinued ? (
+            <Note>
+              Não apresentado. As métricas automáticas de nitidez, contraste e exposição foram descontinuadas:
+              testadas contra imagens rotuladas, não se relacionaram com a adequação. Os motivos de rejeição
+              constam na seção 6, a partir da revisão dos profissionais.
+            </Note>
+          ) : !data.quality_findings ? (
             <Note>Não apresentado: {insufficient}.</Note>
           ) : data.quality_findings.length === 0 ? (
             <Note>Nenhum critério de imagem em atenção ou reprovado no período.</Note>
           ) : (
-            <Table
-              head={["Critério", "Ocorrências", "Participação"]}
-              rows={data.quality_findings.map((f) => [f.label, f.count, `${f.percentage.toFixed(1)}%`])}
-            />
+            <>
+              <Table
+                head={["Critério", "Ocorrências", "Participação"]}
+                rows={data.quality_findings.map((f) => [f.label, f.count, `${f.percentage.toFixed(1)}%`])}
+              />
+              <p className="mt-2 text-xs text-slate-500">
+                Estas métricas foram descontinuadas depois da emissão deste relatório, por não se relacionarem
+                com a adequação nas imagens rotuladas.
+              </p>
+            </>
           )}
         </Section>
 

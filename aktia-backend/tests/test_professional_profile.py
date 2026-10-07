@@ -64,7 +64,7 @@ def test_profile_numbers_and_comparison_with_the_clinic(client, login, clinic):
     }
 
     assert body["history"] == [{"bucket": today().isoformat(), "avg_score": 50.0, "total": 5}]
-    assert [(f["category"], f["count"]) for f in body["quality_findings"]] == [("sharpness", 4)]
+    assert "quality_findings" not in body
 
     assert (body["review"]["reviewed"], body["review"]["rejection_rate"], body["review"]["repeated"]) == (5, 40.0, 1)
     assert [r["reason"] for r in body["review"]["reasons"]] == ["positioning"]
@@ -85,7 +85,6 @@ def test_profile_without_enough_data_uses_null(client, login, clinic, seed):
         "avg_score_delta": None, "approved_rate_delta": None, "insufficient_data": True
     }
     assert body["history"] is None
-    assert body["quality_findings"] is None
     assert body["review"]["rejection_rate"] is None
 
 

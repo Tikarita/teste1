@@ -55,7 +55,11 @@ def history(
     return quality_stats.get_history(current["clinic"]["id"], filters, granularity)
 
 
-@router.get("/findings", response_model=FindingsResponse)
+# Descontinuado: os critérios automáticos de imagem que alimentavam esta rota
+# não se sustentaram na validação (ver analysis_service.IMAGE_MEASUREMENTS) e
+# não são mais gravados. A rota segue respondendo com o que já estava no banco;
+# para motivos de rejeição, use /stats/reviews.
+@router.get("/findings", response_model=FindingsResponse, deprecated=True)
 def findings(
     filters: quality_stats.StatsFilters = Depends(get_filters),
     current=Depends(get_current_user)

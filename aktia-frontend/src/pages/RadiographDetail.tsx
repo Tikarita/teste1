@@ -3,21 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import Heatmap from "../components/Heatmap";
 import ReviewCard from "../components/ReviewCard";
-import type { AnalysisResult, QualityStatus, Radiograph, Review } from "../lib/types";
-
-const STATUS_STYLES: Record<QualityStatus, string> = {
-  approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  attention: "bg-amber-50 text-amber-700 border-amber-200",
-  rejected: "bg-red-50 text-red-700 border-red-200",
-  pending: "bg-slate-50 text-slate-500 border-slate-200"
-};
-
-const STATUS_LABELS: Record<QualityStatus, string> = {
-  approved: "Aprovado",
-  attention: "Atenção",
-  rejected: "Reprovado",
-  pending: "Pendente"
-};
+import type { AnalysisResult, Radiograph, Review } from "../lib/types";
 
 // VITE_ENABLE_AI=false esconde a análise enquanto a IA não está no ar.
 const AI_ENABLED = import.meta.env.VITE_ENABLE_AI !== "false";
@@ -260,31 +246,23 @@ export default function RadiographDetail() {
                   <span className="pb-1 text-sm text-slate-400">/ 100 · probabilidade de adequação</span>
                 </div>
 
-                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Métricas de imagem complementares
-                </p>
-                <p className="mb-2 text-xs text-slate-400">
-                  Calculadas direto da imagem, à parte do classificador: não entram no score e podem divergir dele.
-                </p>
-
-                <ul className="space-y-1.5">
-                  {analysis.efficientnet.criteria.map((criterion) => (
-                    <li key={criterion.category} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">
-                        {criterion.label}
-                        {criterion.raw_value != null && (
-                          <span className="ml-1.5 text-xs text-slate-400">({criterion.raw_value})</span>
-                        )}
-                      </span>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[criterion.status]}`}
-                      >
-                        {STATUS_LABELS[criterion.status]}
-                        {criterion.score != null ? ` · ${criterion.score}` : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                {analysis.efficientnet.image_measurements && (
+                  <details className="text-xs text-slate-500">
+                    <summary className="cursor-pointer">Medidas técnicas da imagem</summary>
+                    <ul className="mt-2 space-y-1">
+                      {analysis.efficientnet.image_measurements.map((measurement) => (
+                        <li key={measurement.key} className="flex justify-between">
+                          <span>{measurement.label}</span>
+                          <span className="font-medium text-slate-600">{measurement.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-slate-400">
+                      Só informativas. Testadas contra imagens rotuladas, não se relacionaram com a adequação,
+                      por isso não recebem nota nem entram no score.
+                    </p>
+                  </details>
+                )}
 
                 <p className="mt-3 text-sm text-slate-600">{analysis.efficientnet.recommendation}</p>
               </div>

@@ -64,7 +64,10 @@ class QualityReportData(BaseModel):
     history_granularity: str
     history: list[HistoryPoint] | None
     professionals: list[ProfessionalStats]
-    quality_findings: list[FindingShare] | None
+    # Só os relatórios emitidos até out/2026 trazem esta lista: as métricas
+    # automáticas de imagem foram descontinuadas (ver analysis_service).
+    quality_findings: list[FindingShare] | None = None
+    quality_findings_discontinued: bool = False
     # Ausente nos relatórios emitidos antes de existir a revisão humana.
     review: ReviewStats | None = None
     models: list[ReportModel]

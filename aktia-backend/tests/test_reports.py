@@ -70,7 +70,8 @@ def test_report_numbers_match_the_period(client, login, clinic_a):
     assert by_name["Admin A"]["total"] == 0
     assert by_name[None]["total"] == 1 and by_name[None]["avg_score"] is None
 
-    assert [(f["category"], f["count"]) for f in data["quality_findings"]] == [("contrast", 1), ("sharpness", 1)]
+    assert data["quality_findings"] is None
+    assert data["quality_findings_discontinued"] is True
     assert any("RDC ANVISA nº 611/2022" in line for line in data["methodology"])
     assert any("não substitui" in line for line in data["methodology"])
 

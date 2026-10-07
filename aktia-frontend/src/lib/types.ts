@@ -82,7 +82,14 @@ export interface EfficientNetResult {
     target_class: string;
     grid: number[][];
   };
+  /**
+   * Vazio nas análises novas: os critérios automáticos de imagem foram
+   * descontinuados por não se relacionarem com a adequação. Análises antigas
+   * ainda trazem a lista, que não é mais exibida.
+   */
   criteria: QualityCriterion[];
+  /** Medidas brutas da imagem, só informativas (sem nota nem status). */
+  image_measurements?: { key: string; label: string; value: number }[];
   recommendation: string;
 }
 
@@ -219,7 +226,9 @@ export interface QualityReport extends ReportSummary {
     history_granularity: "day" | "week";
     history: { bucket: string; avg_score: number | null; total: number }[] | null;
     professionals: ProfessionalStats[];
-    quality_findings: { category: string; label: string; count: number; percentage: number }[] | null;
+    /** Só relatórios antigos trazem esta lista; nos novos ela foi descontinuada. */
+    quality_findings?: { category: string; label: string; count: number; percentage: number }[] | null;
+    quality_findings_discontinued?: boolean;
     /** Ausente nos relatórios emitidos antes de existir a revisão humana. */
     review?: ReviewStats | null;
     models: { model_version: string; total: number }[];
@@ -290,7 +299,6 @@ export interface ProfessionalProfile {
   versus_clinic: QualitySummary["comparison"];
   history_granularity: "day" | "week";
   history: { bucket: string; avg_score: number | null; total: number }[] | null;
-  quality_findings: { category: string; label: string; count: number; percentage: number }[] | null;
   review: ReviewStats;
   clinic_rejection_rate: number | null;
 }

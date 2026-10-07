@@ -4,7 +4,6 @@ import { api } from "../lib/api";
 import { useClinics } from "../context/ClinicContext";
 import type {
   ClinicalFindingsStats,
-  QualityFindingsStats,
   QualityHistory,
   QualitySummary,
   Radiograph,
@@ -32,7 +31,6 @@ export default function Dashboard() {
   const [period, setPeriod] = useState<StatsPeriod>("30");
   const [summary, setSummary] = useState<QualitySummary | null>(null);
   const [history, setHistory] = useState<QualityHistory | null>(null);
-  const [qualityFindings, setQualityFindings] = useState<QualityFindingsStats | null>(null);
   const [clinicalFindings, setClinicalFindings] = useState<ClinicalFindingsStats | null>(null);
   const [reviews, setReviews] = useState<ReviewStatsResponse | null>(null);
   const [recent, setRecent] = useState<Radiograph[]>([]);
@@ -75,15 +73,13 @@ export default function Dashboard() {
     Promise.all([
       api.statsSummary({ period }).catch(orNull),
       api.statsHistory({ period }).catch(orNull),
-      api.statsFindings({ period }).catch(orNull),
       api.statsClinicalFindings({ period }).catch(orNull),
       api.statsReviews({ period }).catch(orNull)
     ])
-      .then(([summaryData, historyData, findingsData, clinicalData, reviewData]) => {
+      .then(([summaryData, historyData, clinicalData, reviewData]) => {
         setReviews(reviewData);
         setSummary(summaryData);
         setHistory(historyData);
-        setQualityFindings(findingsData);
         setClinicalFindings(clinicalData);
       })
       .finally(() => setLoading(false));
@@ -209,31 +205,6 @@ export default function Dashboard() {
                   <span className="w-24 shrink-0 text-right text-slate-700">
                     {point.avg_score != null ? point.avg_score.toFixed(1) : "—"}
                     <span className="ml-1 text-xs text-slate-400">({point.total})</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <Panel
-          title="Problemas de qualidade mais comuns"
-          subtitle="Critérios em atenção ou reprovados. São métricas de imagem complementares, não a decisão do modelo."
-        >
-          {loading && <Muted>Carregando...</Muted>}
-          {!loading && qualityFindings?.insufficient_data && <Insufficient min={qualityFindings.min_sample_size} />}
-          {!loading && qualityFindings?.items?.length === 0 && (
-            <Muted>Nenhum critério com problema nas análises do período.</Muted>
-          )}
-          {!loading && qualityFindings?.items && qualityFindings.items.length > 0 && (
-            <ul className="space-y-1.5">
-              {qualityFindings.items.map((item) => (
-                <li key={item.category} className="flex items-center gap-3 text-sm">
-                  <span className="w-40 shrink-0 truncate text-slate-600">{item.label}</span>
-                  <Bar percent={item.percentage} />
-                  <span className="w-24 shrink-0 text-right text-slate-700">
-                    {item.percentage.toFixed(1)}%
-                    <span className="ml-1 text-xs text-slate-400">({item.count})</span>
                   </span>
                 </li>
               ))}

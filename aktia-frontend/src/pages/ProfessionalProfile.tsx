@@ -159,21 +159,6 @@ export default function ProfessionalProfile() {
           )}
         </Panel>
 
-        <Panel
-          title="Problemas de imagem mais comuns"
-          subtitle="Métricas de imagem complementares, não a decisão do modelo."
-        >
-          {profile.quality_findings === null ? (
-            <Muted>{insufficient}.</Muted>
-          ) : profile.quality_findings.length === 0 ? (
-            <Muted>Nenhum critério com problema nas análises do período.</Muted>
-          ) : (
-            <Shares
-              items={profile.quality_findings.map((f) => ({ key: f.category, label: f.label, count: f.count, percentage: f.percentage }))}
-            />
-          )}
-        </Panel>
-
         <Panel title="Como ler estes números">
           <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-600">
             <li>

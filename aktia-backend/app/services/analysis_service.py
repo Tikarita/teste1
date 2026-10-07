@@ -7,42 +7,25 @@ from app.services import yolo_service
 from app.services.efficientnet_service import classify_adequacy
 from app.services.finding_labels import CLASS_LABELS, LOW_RELIABILITY_CLASSES
 
-QUALITY_CATEGORIES = [
-    ("sharpness", "Nitidez"),
-    ("contrast", "Contraste"),
-    ("artifacts", "Exposição/Artefatos"),
-    ("positioning", "Posicionamento"),
-    ("coverage", "Cobertura anatômica")
-]
-
-# `positioning` e `coverage` exigem entender ONDE está a anatomia na imagem
-# e o YOLO disponível detecta achados clínicos, não posicionamento. Não há
-# como calcular isso de verdade ainda — inventar um número aqui passaria
-# confiança clínica que não existe, então esses critérios ficam "pending"
-# até existir um modelo para eles.
-PENDING_CATEGORIES = {"positioning", "coverage"}
-
-# Curvas calibradas em 2026-09 a partir dos percentis reais de ~500 imagens
-# de dados/images/{train,valid} (sem rótulo de qualidade — é o corpus de
-# treino do YOLO, usado aqui só como amostra do que uma radiografia "típica"
-# parece, não como verdade absoluta). A pasta `test` do dataset foi excluída
-# da calibração: suas imagens têm nitidez sistematicamente mais baixa
-# (mediana de variância do Laplaciano ~3x menor que em train/valid),
-# indício de que esse split passou por outro pipeline de redimensionamento/
-# compressão — usá-lo enviesaria o limiar para "tudo parece borrado".
+# Medidas clássicas de visão computacional calculadas direto da imagem.
 #
-# Cada curva é uma função linear por partes (percentil -> score), não um
-# min/max único: isso evita que a mediana do corpus já caia perto de 0 ou
-# 100, mas ainda é só um ponto de partida. Ajuste com rótulos reais de
-# "adequado/inadequado" assim que existirem (ver Fase 2: botão de feedback).
-SHARPNESS_CURVE = [  # variância do filtro de Laplace (p2, p10, p50, p90, p98)
-    (281.0, 10), (387.0, 30), (1087.0, 70), (1202.0, 92), (1258.0, 99)
-]
-CONTRAST_CURVE = [  # desvio padrão da intensidade normalizada (0-1)
-    (0.190, 10), (0.214, 30), (0.243, 70), (0.276, 92), (0.295, 99)
-]
-CLIP_CURVE = [  # fração de pixels saturados (0 ou 255) — quanto menor, melhor
-    (0.0025, 99), (0.0136, 92), (0.0398, 70), (0.0832, 30), (0.1124, 10)
+# Até out/2026 elas viravam "critérios" com nota e status (aprovado/atenção/
+# reprovado). Validadas contra os 5.012 rótulos adequado/inadequado de
+# dados/labels_qualidade.csv, não se sustentaram: dentro de cada base de
+# imagens a AUC de cada uma fica entre 0,45 e 0,49 na direção assumida (0,50 é
+# acaso), e no split de teste as imagens "reprovadas" em nitidez tinham 33% de
+# inadequadas contra 35% no geral. Juntas numa regressão logística chegam a
+# AUC 0,59 no teste, quase toda vinda de diferenças entre as bases, não de
+# qualidade. Por isso deixaram de ter nota e status e de alimentar
+# estatísticas e relatórios: ficam só como medida técnica informativa.
+#
+# Posicionamento e cobertura anatômica nunca foram calculados. O caminho para
+# ter critérios de verdade são os motivos de rejeição que a revisão humana
+# passa a registrar (ver review_service), que servem de rótulo por critério.
+IMAGE_MEASUREMENTS = [
+    ("sharpness", "Nitidez (variância do Laplaciano)"),
+    ("contrast", "Contraste (desvio padrão da intensidade)"),
+    ("saturation", "Pixels saturados (fração)")
 ]
 
 MAX_DIMENSION = 768
@@ -72,34 +55,6 @@ def run_yolo_detection(image_bytes: bytes) -> dict:
         "available": True,
         "findings": findings
     }
-
-
-def _piecewise_score(value: float, curve: list[tuple[float, float]]) -> int:
-    """
-    Interpola `value` numa curva (valor_da_métrica, score) ordenada por
-    valor crescente. Fora dos extremos, estende a inclinação do segmento
-    mais próximo e limita o resultado a [0, 100].
-    """
-    if value <= curve[0][0]:
-        (x0, y0), (x1, y1) = curve[0], curve[1]
-    elif value >= curve[-1][0]:
-        (x0, y0), (x1, y1) = curve[-2], curve[-1]
-    else:
-        for (x0, y0), (x1, y1) in zip(curve, curve[1:]):
-            if x0 <= value <= x1:
-                break
-
-    ratio = (value - x0) / (x1 - x0) if x1 != x0 else 0.0
-    score = y0 + ratio * (y1 - y0)
-    return round(max(0.0, min(100.0, score)))
-
-
-def _status_from_score(score: int) -> str:
-    if score >= 75:
-        return "approved"
-    if score >= 55:
-        return "attention"
-    return "rejected"
 
 
 def _load_grayscale_array(image_bytes: bytes) -> np.ndarray:
@@ -141,65 +96,29 @@ def run_efficientnet_adequacy(image_bytes: bytes) -> dict:
     """
     Controle de qualidade técnica da radiografia (adequado/inadequado).
 
-    A decisão (`is_adequate`/`score`/`confidence`/`model`) vem da
-    EfficientNet-B0 supervisionada, treinada com rótulos adequado/inadequado
-    (ver efficientnet_service.classify_adequacy). `score` é a probabilidade
-    de "adequado" em escala 0-100.
+    A decisão (`is_adequate`/`score`/`confidence`/`model`) e a explicação
+    visual vêm da EfficientNet-B0 supervisionada (ver
+    efficientnet_service.classify_adequacy). `score` é a probabilidade de
+    "adequado" em escala 0-100.
 
-    O detalhamento por critério (nitidez/contraste/artefatos) NÃO vem do
-    modelo, que só decide adequado/inadequado: são métricas clássicas de
-    visão computacional calculadas direto da imagem, mantidas como informação
-    complementar sobre possíveis causas. Elas não entram no `score` e ainda
-    não foram validadas contra os rótulos. `positioning` e `coverage` ficam como
-    "pending" (ver PENDING_CATEGORIES) até existir um modelo que localize a
-    anatomia na imagem.
+    `image_measurements` são medidas brutas da imagem, só informativas (ver
+    IMAGE_MEASUREMENTS). `criteria` fica vazio: não há critério de qualidade
+    automático validado.
     """
     gray = _load_grayscale_array(image_bytes)
-
-    metric_by_category = {
+    values = {
         "sharpness": _sharpness_metric(gray),
         "contrast": _contrast_metric(gray),
-        "artifacts": _clipping_metric(gray)
+        "saturation": _clipping_metric(gray)
     }
-
-    score_by_category = {
-        "sharpness": _piecewise_score(metric_by_category["sharpness"], SHARPNESS_CURVE),
-        "contrast": _piecewise_score(metric_by_category["contrast"], CONTRAST_CURVE),
-        "artifacts": _piecewise_score(metric_by_category["artifacts"], CLIP_CURVE)
-    }
-
-    criteria = []
-    for key, label in QUALITY_CATEGORIES:
-        if key in PENDING_CATEGORIES:
-            criteria.append({
-                "category": key,
-                "label": label,
-                "score": None,
-                "status": "pending",
-                "raw_value": None
-            })
-        else:
-            criteria.append({
-                "category": key,
-                "label": label,
-                "score": score_by_category[key],
-                "status": _status_from_score(score_by_category[key]),
-                "raw_value": round(metric_by_category[key], 4)
-            })
 
     model_result = classify_adequacy(image_bytes)
 
-    pending_labels = [c["label"] for c in criteria if c["status"] == "pending"]
-    pending_note = (
-        f" Critérios ainda não avaliados automaticamente (aguardam modelo treinado): {', '.join(pending_labels)}."
-        if pending_labels else ""
-    )
-
     recommendation = (
-        "Qualidade técnica adequada."
+        "O classificador considerou a qualidade técnica adequada."
         if model_result["is_adequate"] else
-        "Qualidade técnica abaixo do ideal — considere repetir a captura antes do laudo."
-    ) + pending_note
+        "O classificador apontou qualidade técnica abaixo do ideal. Avalie a imagem e registre a revisão."
+    )
 
     return {
         "model": model_result["model"],
@@ -207,7 +126,11 @@ def run_efficientnet_adequacy(image_bytes: bytes) -> dict:
         "score": model_result["score"],
         "confidence": model_result["confidence"],
         "explanation": model_result["explanation"],
-        "criteria": criteria,
+        "criteria": [],
+        "image_measurements": [
+            {"key": key, "label": label, "value": round(values[key], 4)}
+            for key, label in IMAGE_MEASUREMENTS
+        ],
         "recommendation": recommendation
     }
 

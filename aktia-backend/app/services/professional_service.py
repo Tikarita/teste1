@@ -6,7 +6,6 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.schemas.reviews import ReviewStats
 from app.schemas.stats import (
-    FindingShare,
     HistoryPoint,
     Period,
     PeriodSummary,
@@ -40,7 +39,6 @@ class ProfessionalProfile(BaseModel):
     versus_clinic: SummaryComparison
     history_granularity: str
     history: list[HistoryPoint] | None
-    quality_findings: list[FindingShare] | None
     review: ReviewStats
     clinic_rejection_rate: float | None
 
@@ -96,7 +94,6 @@ def get_profile(current: dict, professional_id: UUID, filters: StatsFilters) -> 
         versus_clinic=quality_stats._compare(summary.current, clinic_summary),
         history_granularity=history.granularity,
         history=history.points,
-        quality_findings=quality_stats.get_findings(clinic_id, own).items,
         review=review_service.get_review_stats(clinic_id, own),
         clinic_rejection_rate=review_service.get_review_stats(clinic_id, clinic).rejection_rate
     )

@@ -36,8 +36,9 @@ METHODOLOGY = [
     "A seção de revisão registra a decisão do profissional da clínica sobre cada exame. A taxa "
     "de rejeição ali apresentada considera somente os exames revisados; a cobertura indica que "
     "parcela dos exames do período passou por essa revisão.",
-    "Os problemas de imagem listados (nitidez, contraste, exposição) são métricas calculadas "
-    "diretamente da imagem, complementares à classificação e ainda não validadas clinicamente.",
+    "A plataforma não apresenta notas automáticas por critério (nitidez, contraste, exposição): "
+    "testadas contra as imagens rotuladas, essas métricas não se relacionaram com a adequação. Os "
+    "motivos de rejeição deste relatório vêm exclusivamente da revisão dos profissionais.",
     "Este relatório não substitui os testes de aceitação e de controle de qualidade dos "
     "equipamentos previstos no Anexo I da IN ANVISA nº 94/2021, nem a avaliação do responsável "
     "técnico.",
@@ -108,7 +109,6 @@ def build_quality_report_data(current: dict, start: date, end: date) -> QualityR
     summary = quality_stats.get_summary(clinic_id, filters)
     history = quality_stats.get_history(clinic_id, filters)
     professionals = quality_stats.get_by_professional(clinic_id, filters)
-    findings = quality_stats.get_findings(clinic_id, filters)
 
     volume_rows = quality_stats._rpc("report_volume", window)
     volume = volume_rows[0] if volume_rows else {}
@@ -132,7 +132,8 @@ def build_quality_report_data(current: dict, start: date, end: date) -> QualityR
         history_granularity=history.granularity,
         history=history.points,
         professionals=professionals.professionals,
-        quality_findings=findings.items,
+        quality_findings=None,
+        quality_findings_discontinued=True,
         review=review_service.get_review_stats(clinic_id, filters),
         models=[
             ReportModel(model_version=row["model_version"], total=int(row["total"]))
