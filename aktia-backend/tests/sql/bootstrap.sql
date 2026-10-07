@@ -117,6 +117,20 @@ create table public.analysis_findings (
   constraint analysis_findings_analysis_id_fkey foreign key (analysis_id) references public.analyses (id) on delete cascade
 );
 
+create table public.reports (
+  id uuid default gen_random_uuid() not null,
+  clinic_id uuid,
+  generated_by uuid,
+  file_path text,
+  report_type text default 'analysis'::text not null,
+  created_at timestamp with time zone default now() not null,
+  constraint reports_pkey primary key (id),
+  constraint reports_report_type_check check (report_type = any (array['analysis'::text, 'monthly'::text, 'quality'::text])),
+  constraint reports_clinic_id_fkey foreign key (clinic_id) references public.clinics (id) on delete cascade,
+  constraint reports_generated_by_fkey foreign key (generated_by) references public.profiles (id) on delete set null
+);
+
+create index idx_reports_clinic_id on public.reports using btree (clinic_id);
 create index idx_analyses_clinic_id on public.analyses using btree (clinic_id);
 create index idx_analyses_radiograph_id on public.analyses using btree (radiograph_id);
 create index idx_analyses_status on public.analyses using btree (status);
@@ -131,6 +145,7 @@ alter table public.profiles enable row level security;
 alter table public.radiographs enable row level security;
 alter table public.analyses enable row level security;
 alter table public.analysis_findings enable row level security;
+alter table public.reports enable row level security;
 
 create policy "Users can view clinic analyses" on public.analyses
   for select to authenticated

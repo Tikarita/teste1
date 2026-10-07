@@ -5,6 +5,8 @@ import Dashboard from "./pages/Dashboard";
 import Clinic from "./pages/Clinic";
 import Login from "./pages/Login";
 import Radiographs from "./pages/Radiographs";
+import Reports from "./pages/Reports";
+import ReportView from "./pages/ReportView";
 import RadiographDetail from "./pages/RadiographDetail";
 
 export default function App() {
@@ -18,6 +20,8 @@ export default function App() {
           <Route path="clinica" element={<Clinic />} />
           <Route path="radiografias" element={<Radiographs />} />
           <Route path="radiografias/:id" element={<RadiographDetail />} />
+          <Route path="relatorios" element={<Reports />} />
+          <Route path="relatorios/:id" element={<ReportView />} />
         </Route>
       </Route>
     </Routes>

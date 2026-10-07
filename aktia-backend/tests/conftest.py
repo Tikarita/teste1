@@ -21,7 +21,7 @@ os.environ["STATS_TIMEZONE"] = "America/Sao_Paulo"
 
 from app.api.auth import get_current_user  # noqa: E402
 from app.main import app  # noqa: E402
-from app.services import quality_stats  # noqa: E402
+from app.services import quality_stats, report_service  # noqa: E402
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -89,7 +89,8 @@ def _schema(database_url):
 def db(database_url, _schema):
     with psycopg.connect(database_url, autocommit=True, row_factory=dict_row) as connection:
         connection.execute(
-            "truncate analysis_findings, analyses, radiographs, profiles, clinics, auth.users, storage.objects cascade"
+            "truncate reports, analysis_findings, analyses, radiographs, profiles, clinics, "
+            "auth.users, storage.objects cascade"
         )
         yield connection
 
@@ -191,11 +192,38 @@ def rpc_on_database(db, monkeypatch):
     monkeypatch.setattr(quality_stats, "_clinic_staff", staff)
 
 
-def session_for(clinic_id: str, profile_id: str) -> dict:
+@pytest.fixture
+def reports_on_database(db, rpc_on_database, monkeypatch):
+    """Grava e lê relatórios na tabela `reports` do Postgres de teste."""
+
+    def insert(row: dict) -> dict:
+        columns = ", ".join(row)
+        placeholders = ", ".join(["%s"] * len(row))
+        return db.execute(
+            f"insert into reports ({columns}) values ({placeholders}) returning *",
+            [Jsonb(value) if isinstance(value, (dict, list)) else value for value in row.values()]
+        ).fetchone()
+
+    def select(clinic_id: str, report_id: str | None = None) -> list[dict]:
+        return db.execute(
+            """
+            select * from reports
+            where clinic_id = %s and report_type = 'quality'
+              and (%s::uuid is null or id = %s::uuid)
+            order by created_at desc
+            """,
+            (clinic_id, report_id, report_id)
+        ).fetchall()
+
+    monkeypatch.setattr(report_service, "_insert_report", insert)
+    monkeypatch.setattr(report_service, "_select_reports", select)
+
+
+def session_for(clinic_id: str, profile_id: str, role: str = "user") -> dict:
     """O que get_current_user devolve para um usuário logado."""
     return {
-        "profile": {"id": profile_id, "clinic_id": clinic_id, "role": "user"},
-        "clinic": {"id": clinic_id, "name": "Clínica"}
+        "profile": {"id": profile_id, "clinic_id": clinic_id, "role": role, "full_name": "Usuária de Teste"},
+        "clinic": {"id": clinic_id, "name": "Clínica", "cnpj": "00.000.000/0001-91"}
     }
 
 
@@ -203,8 +231,8 @@ def session_for(clinic_id: str, profile_id: str) -> dict:
 def login():
     """Autentica as próximas requisições como o usuário informado."""
 
-    def _login(clinic_id: str, profile_id: str) -> None:
-        app.dependency_overrides[get_current_user] = lambda: session_for(clinic_id, profile_id)
+    def _login(clinic_id: str, profile_id: str, role: str = "user") -> None:
+        app.dependency_overrides[get_current_user] = lambda: session_for(clinic_id, profile_id, role)
 
     yield _login
     app.dependency_overrides.clear()

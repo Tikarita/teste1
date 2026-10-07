@@ -4,7 +4,8 @@ import { useAuth } from "../context/AuthContext";
 const navItems = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/clinica", label: "Clínica" },
-  { to: "/radiografias", label: "Radiografias" }
+  { to: "/radiografias", label: "Radiografias" },
+  { to: "/relatorios", label: "Relatórios" }
 ];
 
 export default function Layout() {
@@ -18,7 +19,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex">
-      <aside className="w-60 shrink-0 bg-slate-900 text-slate-100 flex flex-col">
+      <aside className="w-60 shrink-0 bg-slate-900 text-slate-100 flex flex-col print:hidden">
         <div className="px-5 py-4 border-b border-slate-800">
           <p className="text-lg font-semibold">AktIA</p>
           {clinic && <p className="mt-0.5 truncate text-xs text-slate-400">{clinic.name}</p>}
@@ -49,7 +50,7 @@ export default function Layout() {
       </aside>
 
       <div className="flex-1 flex flex-col">
-        <header className="h-14 border-b border-slate-200 bg-white flex items-center justify-between px-6">
+        <header className="h-14 border-b border-slate-200 bg-white flex items-center justify-between px-6 print:hidden">
           <span className="text-sm text-slate-500">{clinic?.name ?? "Clínica"}</span>
 
           <div className="flex items-center gap-4">
@@ -69,7 +70,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 print:p-0">
           <Outlet />
         </main>
       </div>

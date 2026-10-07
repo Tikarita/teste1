@@ -180,3 +180,38 @@ export interface ClinicalFindingsStats {
     | null;
   insufficient_data: boolean;
 }
+
+// --- Relatórios de Garantia da Qualidade (/reports/quality) ------------------
+
+export interface ReportSummary {
+  id: string;
+  report_type: string;
+  title: string | null;
+  /** O período é [period_start, period_end). */
+  period_start: string | null;
+  period_end: string | null;
+  created_at: string;
+  generated_by_name: string | null;
+}
+
+export interface QualityReport extends ReportSummary {
+  notes: string | null;
+  /** Cópia congelada dos números na emissão. */
+  data: {
+    clinic: { name: string; cnpj: string | null };
+    generated_by: { id: string; full_name: string | null };
+    period: { start: string; end: string };
+    previous_period: { start: string; end: string };
+    min_sample_size: number;
+    volume: { uploaded: number; analyzed: number; not_analyzed: number };
+    summary: PeriodSummary;
+    previous: PeriodSummary;
+    comparison: QualitySummary["comparison"];
+    history_granularity: "day" | "week";
+    history: { bucket: string; avg_score: number | null; total: number }[] | null;
+    professionals: ProfessionalStats[];
+    quality_findings: { category: string; label: string; count: number; percentage: number }[] | null;
+    models: { model_version: string; total: number }[];
+    methodology: string[];
+  };
+}

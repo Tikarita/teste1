@@ -6,8 +6,10 @@ import type {
   ProfessionalsStats,
   QualityFindingsStats,
   QualityHistory,
+  QualityReport,
   QualitySummary,
   Radiograph,
+  ReportSummary,
   StaffMember,
   StaffRole,
   StatsQuery
@@ -139,5 +141,13 @@ export const api = {
   statsFindings: (query: StatsQuery) => request<QualityFindingsStats>(statsPath("findings", query)),
   statsProfessionals: (query: StatsQuery) => request<ProfessionalsStats>(statsPath("professionals", query)),
   statsClinicalFindings: (query: StatsQuery) =>
-    request<ClinicalFindingsStats>(statsPath("clinical-findings", query))
+    request<ClinicalFindingsStats>(statsPath("clinical-findings", query)),
+
+  listQualityReports: () => request<ReportSummary[]>("/reports/quality"),
+  getQualityReport: (id: string) => request<QualityReport>(`/reports/quality/${id}`),
+  createQualityReport: (payload: { period_start: string; period_end: string; notes?: string }) =>
+    request<QualityReport>("/reports/quality", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    })
 };
