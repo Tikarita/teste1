@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
-import type { AnalysisResult, QualityStatus, Radiograph } from "../lib/types";
+import ReviewCard from "../components/ReviewCard";
+import type { AnalysisResult, QualityStatus, Radiograph, Review } from "../lib/types";
 
 const STATUS_STYLES: Record<QualityStatus, string> = {
   approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -32,6 +33,7 @@ export default function RadiographDetail() {
   const [error, setError] = useState<string | null>(null);
 
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [review, setReview] = useState<Review | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -51,6 +53,7 @@ export default function RadiographDetail() {
       .then((res) => {
         setRadiograph(res.data);
         setAnalysis(res.data.analysis_result ?? null);
+        setReview(res.review ?? null);
         const url = res.signed_url?.signedUrl ?? res.signed_url?.signedURL ?? null;
         setImageUrl(url && url.startsWith("http") ? url : null);
       })
@@ -301,6 +304,8 @@ export default function RadiographDetail() {
               </p>
             </>
           )}
+
+          <ReviewCard radiographId={radiograph.id} review={review} onSaved={setReview} />
         </div>
       </div>
     </div>

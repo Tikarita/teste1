@@ -128,7 +128,56 @@ export default function ReportView() {
           )}
         </Section>
 
-        <Section title="6. Ações corretivas e observações">
+        <Section title="6. Revisão pelos profissionais (taxa de rejeição)">
+          {!data.review ? (
+            <Note>Este relatório foi emitido antes de a revisão humana existir na plataforma.</Note>
+          ) : (
+            <>
+              <Table
+                head={["Indicador", "Valor"]}
+                rows={[
+                  ["Exames enviados no período", data.review.uploaded],
+                  [
+                    "Exames revisados",
+                    data.review.coverage_rate != null
+                      ? `${data.review.reviewed} (${data.review.coverage_rate.toFixed(1)}% de cobertura)`
+                      : data.review.reviewed
+                  ],
+                  ["Considerados adequados", data.review.human_adequate],
+                  ["Considerados inadequados (rejeitados)", data.review.human_inadequate],
+                  [
+                    "Taxa de rejeição entre os revisados",
+                    data.review.rejection_rate != null ? `${data.review.rejection_rate.toFixed(1)}%` : "dados insuficientes"
+                  ],
+                  [
+                    "Exames repetidos",
+                    data.review.repeat_rate != null
+                      ? `${data.review.repeated} (${data.review.repeat_rate.toFixed(1)}% dos revisados)`
+                      : data.review.repeated
+                  ],
+                  [
+                    "Concordância entre a revisão e a IA",
+                    data.review.ai_agreement_rate != null
+                      ? `${data.review.ai_agreement_rate.toFixed(1)}% (${data.review.agreed_with_ai} de ${data.review.compared_with_ai})`
+                      : "dados insuficientes"
+                  ],
+                  ["Inadequados que a IA havia considerado adequados", data.review.ai_missed],
+                  ["Adequados que a IA havia considerado inadequados", data.review.ai_false_alarm]
+                ]}
+              />
+              {data.review.reasons && data.review.reasons.length > 0 && (
+                <div className="mt-3">
+                  <Table
+                    head={["Motivo de rejeição", "Ocorrências", "Participação"]}
+                    rows={data.review.reasons.map((r) => [r.label, r.count, `${r.percentage.toFixed(1)}%`])}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </Section>
+
+        <Section title="7. Ações corretivas e observações">
           {report.notes ? (
             <p className="whitespace-pre-wrap text-sm text-slate-700">{report.notes}</p>
           ) : (
@@ -136,7 +185,7 @@ export default function ReportView() {
           )}
         </Section>
 
-        <Section title="7. Metodologia e limitações">
+        <Section title="8. Metodologia e limitações">
           <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-700">
             {data.methodology.map((line, i) => (
               <li key={i}>{line}</li>

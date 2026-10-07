@@ -10,6 +10,9 @@ import type {
   QualitySummary,
   Radiograph,
   ReportSummary,
+  Review,
+  ReviewReason,
+  ReviewStatsResponse,
   StaffMember,
   StaffRole,
   StatsQuery
@@ -116,7 +119,15 @@ export const api = {
   listRadiographsByClinic: (clinicId: string) =>
     request<{ data: Radiograph[] }>(`/analysis/clinic/${clinicId}`),
   getRadiograph: (id: string) =>
-    request<{ data: Radiograph; signed_url: Record<string, string> }>(`/analysis/${id}`),
+    request<{ data: Radiograph; signed_url: Record<string, string>; review: Review | null }>(`/analysis/${id}`),
+  reviewRadiograph: (
+    id: string,
+    payload: { verdict: "adequate" | "inadequate"; reasons: ReviewReason[]; repeated: boolean; notes?: string }
+  ) =>
+    request<Review>(`/analysis/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
   // Clínica e autor do envio vêm da sessão no backend. Sem professional_id, o
   // responsável pela captura é o próprio usuário logado.
   uploadRadiograph: (payload: { professional_id?: string; file: File }) => {
@@ -142,6 +153,8 @@ export const api = {
   statsProfessionals: (query: StatsQuery) => request<ProfessionalsStats>(statsPath("professionals", query)),
   statsClinicalFindings: (query: StatsQuery) =>
     request<ClinicalFindingsStats>(statsPath("clinical-findings", query)),
+
+  statsReviews: (query: StatsQuery) => request<ReviewStatsResponse>(statsPath("reviews", query)),
 
   listQualityReports: () => request<ReportSummary[]>("/reports/quality"),
   getQualityReport: (id: string) => request<QualityReport>(`/reports/quality/${id}`),

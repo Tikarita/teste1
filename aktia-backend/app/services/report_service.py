@@ -13,7 +13,7 @@ from app.schemas.reports import (
     ReportVolume,
 )
 from app.schemas.stats import Period
-from app.services import quality_stats
+from app.services import quality_stats, review_service
 from app.services.supabase_service import execute_with_retry, supabase
 
 
@@ -33,6 +33,9 @@ METHODOLOGY = [
     "Limitação: no conjunto de teste o modelo acertou 77,9% das classificações e identificou "
     "58,9% das imagens inadequadas. Ele deixa de apontar parte das imagens ruins, então a taxa "
     "de inadequadas deste relatório é uma triagem, não a taxa real de rejeição do serviço.",
+    "A seção de revisão registra a decisão do profissional da clínica sobre cada exame. A taxa "
+    "de rejeição ali apresentada considera somente os exames revisados; a cobertura indica que "
+    "parcela dos exames do período passou por essa revisão.",
     "Os problemas de imagem listados (nitidez, contraste, exposição) são métricas calculadas "
     "diretamente da imagem, complementares à classificação e ainda não validadas clinicamente.",
     "Este relatório não substitui os testes de aceitação e de controle de qualidade dos "
@@ -130,6 +133,7 @@ def build_quality_report_data(current: dict, start: date, end: date) -> QualityR
         history=history.points,
         professionals=professionals.professionals,
         quality_findings=findings.items,
+        review=review_service.get_review_stats(clinic_id, filters),
         models=[
             ReportModel(model_version=row["model_version"], total=int(row["total"]))
             for row in quality_stats._rpc("report_models", window)

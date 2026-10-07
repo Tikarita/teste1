@@ -8,6 +8,7 @@ import type {
   QualityHistory,
   QualitySummary,
   Radiograph,
+  ReviewStatsResponse,
   StatsPeriod
 } from "../lib/types";
 
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState<QualityHistory | null>(null);
   const [qualityFindings, setQualityFindings] = useState<QualityFindingsStats | null>(null);
   const [clinicalFindings, setClinicalFindings] = useState<ClinicalFindingsStats | null>(null);
+  const [reviews, setReviews] = useState<ReviewStatsResponse | null>(null);
   const [recent, setRecent] = useState<Radiograph[]>([]);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -74,9 +76,11 @@ export default function Dashboard() {
       api.statsSummary({ period }).catch(orNull),
       api.statsHistory({ period }).catch(orNull),
       api.statsFindings({ period }).catch(orNull),
-      api.statsClinicalFindings({ period }).catch(orNull)
+      api.statsClinicalFindings({ period }).catch(orNull),
+      api.statsReviews({ period }).catch(orNull)
     ])
-      .then(([summaryData, historyData, findingsData, clinicalData]) => {
+      .then(([summaryData, historyData, findingsData, clinicalData, reviewData]) => {
+        setReviews(reviewData);
         setSummary(summaryData);
         setHistory(historyData);
         setQualityFindings(findingsData);
@@ -143,6 +147,51 @@ export default function Dashboard() {
           tone="warn"
         />
       </div>
+
+      <Panel
+        title="Revisão pelos profissionais"
+        subtitle="Decisão humana sobre os exames enviados no período. É a taxa de rejeição que vai para o relatório."
+      >
+        {loading && <Muted>Carregando...</Muted>}
+        {!loading && reviews && (
+          <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+            <Metric
+              label="Exames revisados"
+              value={`${reviews.reviewed} de ${reviews.uploaded}`}
+              hint={reviews.coverage_rate != null ? `${reviews.coverage_rate.toFixed(1)}% de cobertura` : undefined}
+            />
+            <Metric
+              label="Taxa de rejeição"
+              value={reviews.rejection_rate != null ? `${reviews.rejection_rate.toFixed(1)}%` : "—"}
+              hint={
+                reviews.insufficient_data
+                  ? `Dados insuficientes (mínimo de ${reviews.min_sample_size} revisões)`
+                  : `${reviews.human_inadequate} exame(s) inadequado(s)`
+              }
+            />
+            <Metric
+              label="Exames repetidos"
+              value={String(reviews.repeated)}
+              hint={reviews.repeat_rate != null ? `${reviews.repeat_rate.toFixed(1)}% dos revisados` : undefined}
+            />
+            <Metric
+              label="Concordância com a IA"
+              value={reviews.ai_agreement_rate != null ? `${reviews.ai_agreement_rate.toFixed(1)}%` : "—"}
+              hint={
+                reviews.compared_with_ai > 0
+                  ? `IA deixou passar ${reviews.ai_missed}; alarme falso em ${reviews.ai_false_alarm}`
+                  : "Nenhum exame revisado tem análise da IA"
+              }
+            />
+          </div>
+        )}
+        {!loading && reviews?.reasons && reviews.reasons.length > 0 && (
+          <p className="mt-3 text-xs text-slate-500">
+            Motivos de rejeição:{" "}
+            {reviews.reasons.map((r) => `${r.label} (${r.count})`).join(", ")}
+          </p>
+        )}
+      </Panel>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel
@@ -274,6 +323,16 @@ export default function Dashboard() {
 function formatDay(isoDate: string) {
   const [, month, day] = isoDate.split("-");
   return `${day}/${month}`;
+}
+
+function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold text-slate-900">{value}</p>
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+    </div>
+  );
 }
 
 function Muted({ children }: { children: ReactNode }) {

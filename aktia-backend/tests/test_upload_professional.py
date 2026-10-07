@@ -100,6 +100,8 @@ class FakeSupabase:
 def fake_supabase(monkeypatch):
     fake = FakeSupabase()
     monkeypatch.setattr(analysis, "supabase", fake)
+    # A revisão humana tem testes próprios (test_reviews.py); aqui não há nenhuma.
+    monkeypatch.setattr(analysis.review_service, "_current_review_row", lambda *_: None)
     return fake
 
 

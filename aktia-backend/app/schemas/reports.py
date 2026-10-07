@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.reviews import ReviewStats
 from app.schemas.stats import (
     FindingShare,
     HistoryPoint,
@@ -64,6 +65,8 @@ class QualityReportData(BaseModel):
     history: list[HistoryPoint] | None
     professionals: list[ProfessionalStats]
     quality_findings: list[FindingShare] | None
+    # Ausente nos relatórios emitidos antes de existir a revisão humana.
+    review: ReviewStats | None = None
     models: list[ReportModel]
     methodology: list[str]
 

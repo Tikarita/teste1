@@ -14,7 +14,8 @@ from app.schemas.stats import (
     ProfessionalsResponse,
     SummaryResponse,
 )
-from app.services import quality_stats
+from app.schemas.reviews import ReviewStatsResponse
+from app.services import quality_stats, review_service
 
 
 router = APIRouter(
@@ -75,3 +76,18 @@ def clinical_findings(
     current=Depends(get_current_user)
 ):
     return quality_stats.get_clinical_findings(current["clinic"]["id"], filters)
+
+
+@router.get("/reviews", response_model=ReviewStatsResponse)
+def reviews(
+    filters: quality_stats.StatsFilters = Depends(get_filters),
+    current=Depends(get_current_user)
+):
+    stats = review_service.get_review_stats(current["clinic"]["id"], filters)
+
+    return ReviewStatsResponse(
+        **stats.model_dump(),
+        period={"start": filters.start, "end": filters.end},
+        filters={"professional_id": filters.professional_id, "status": None},
+        min_sample_size=quality_stats.settings.STATS_MIN_SAMPLE_SIZE
+    )

@@ -211,7 +211,58 @@ export interface QualityReport extends ReportSummary {
     history: { bucket: string; avg_score: number | null; total: number }[] | null;
     professionals: ProfessionalStats[];
     quality_findings: { category: string; label: string; count: number; percentage: number }[] | null;
+    /** Ausente nos relatórios emitidos antes de existir a revisão humana. */
+    review?: ReviewStats | null;
     models: { model_version: string; total: number }[];
     methodology: string[];
   };
+}
+
+// --- Revisão humana ----------------------------------------------------------
+
+export type ReviewReason =
+  | "sharpness"
+  | "exposure"
+  | "contrast"
+  | "positioning"
+  | "noise"
+  | "artifacts"
+  | "coverage"
+  | "framing"
+  | "other";
+
+export interface Review {
+  id: string;
+  radiograph_id: string;
+  analysis_id: string | null;
+  reviewed_by: string | null;
+  reviewed_by_name: string | null;
+  verdict: "adequate" | "inadequate";
+  repeated: boolean;
+  reasons: string[];
+  notes: string | null;
+  created_at: string;
+}
+
+/** Taxas ficam nulas (com insufficient_data) abaixo da amostra mínima de revisões. */
+export interface ReviewStats {
+  uploaded: number;
+  reviewed: number;
+  coverage_rate: number | null;
+  human_adequate: number;
+  human_inadequate: number;
+  repeated: number;
+  rejection_rate: number | null;
+  repeat_rate: number | null;
+  compared_with_ai: number;
+  agreed_with_ai: number;
+  ai_agreement_rate: number | null;
+  ai_missed: number;
+  ai_false_alarm: number;
+  reasons: { reason: string; label: string; count: number; percentage: number }[] | null;
+  insufficient_data: boolean;
+}
+
+export interface ReviewStatsResponse extends ReviewStats {
+  min_sample_size: number;
 }

@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.auth import get_current_user
 from app.core.config import settings
+from app.schemas.reviews import Review, ReviewCreate
+from app.services import review_service
 from app.services.image_service import validate_image
 from app.services.supabase_service import supabase
 
@@ -170,7 +172,8 @@ def get_radiograph(radiograph_id: str, current=Depends(get_current_user)):
 
         return {
             "data": radiograph,
-            "signed_url": signed_url_response
+            "signed_url": signed_url_response,
+            "review": review_service.get_current_review(radiograph_id, current["clinic"]["id"])
         }
 
     except HTTPException:
@@ -245,6 +248,22 @@ def analyze_radiograph_by_id(radiograph_id: str, current=Depends(get_current_use
             status_code=500,
             detail=str(e)
         )
+
+
+@router.post("/{radiograph_id}/review", response_model=Review, status_code=201)
+def review_radiograph(
+    radiograph_id: str,
+    payload: ReviewCreate,
+    current=Depends(get_current_user)
+):
+    """
+    Registra a decisão do profissional sobre o exame (adequado/inadequado,
+    motivos e se foi repetido). Revisar de novo não apaga a revisão anterior:
+    ela fica no histórico e a nova passa a valer.
+    """
+    _get_clinic_radiograph(radiograph_id, current["clinic"]["id"])
+
+    return review_service.create_review(radiograph_id, payload, current)
 
 
 @router.delete("/{radiograph_id}")
