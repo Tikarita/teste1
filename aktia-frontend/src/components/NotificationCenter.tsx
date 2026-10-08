@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { useToasts } from "../context/ToastContext";
 import type { NotificationItem } from "../lib/types";
@@ -18,7 +18,8 @@ const osNotificationsSupported = typeof window !== "undefined" && "Notification"
  * minimizado ou em outra aba.
  */
 export default function NotificationCenter() {
-  const { showToast } = useToasts();
+  const { showToast, dismissToast } = useToasts();
+  const { pathname } = useLocation();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -75,9 +76,9 @@ export default function NotificationCenter() {
 
         const pending = list.items.filter((item) => item.read_at === null);
         if (announced.current === null) {
-          // Primeira consulta após abrir o sistema: avisa só o que chegou há
-          // pouco, para não despejar avisos antigos de uma vez.
-          const recent = Date.now() - 5 * 60_000;
+          // Primeira consulta após abrir o sistema: avisa só o que acabou de
+          // chegar. O que é mais antigo fica no sino, sem alerta na tela.
+          const recent = Date.now() - 30_000;
           announced.current = new Set(
             pending.filter((item) => new Date(item.created_at).getTime() < recent).map((item) => item.id)
           );
@@ -103,6 +104,18 @@ export default function NotificationCenter() {
       window.removeEventListener(REFRESH_NOTIFICATIONS_EVENT, refresh);
     };
   }, [refresh]);
+
+  // O alerta no canto vale para o momento em que o exame foi classificado. Ao
+  // mudar de tela, os alertas de outros exames saem: sem isso, o alerta de um
+  // exame inadequado continuava visível sobre o exame seguinte, mesmo adequado.
+  // O aviso em si continua no sino até alguém marcar "Ciente".
+  useEffect(() => {
+    for (const item of items) {
+      if (pathname !== `/radiografias/${item.radiograph_id}`) {
+        dismissToast(`notification-${item.id}`);
+      }
+    }
+  }, [pathname]);
 
   async function enableOsNotifications() {
     if (!osNotificationsSupported) return;
