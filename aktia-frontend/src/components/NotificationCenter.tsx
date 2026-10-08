@@ -20,6 +20,8 @@ const osNotificationsSupported = typeof window !== "undefined" && "Notification"
 export default function NotificationCenter() {
   const { showToast, dismissToast } = useToasts();
   const { pathname } = useLocation();
+  const currentPath = useRef(pathname);
+  currentPath.current = pathname;
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -75,18 +77,25 @@ export default function NotificationCenter() {
         setUnread(list.unread_count);
 
         const pending = list.items.filter((item) => item.read_at === null);
+        const reopening = announced.current === null;
         if (announced.current === null) {
-          // Primeira consulta após abrir o sistema: avisa só o que acabou de
-          // chegar. O que é mais antigo fica no sino, sem alerta na tela.
-          const recent = Date.now() - 30_000;
+          // Primeira consulta após abrir ou recarregar o sistema: volta a
+          // mostrar os avisos não lidos dos últimos 10 minutos. Os mais
+          // antigos ficam só no sino.
+          const recent = Date.now() - 10 * 60_000;
           announced.current = new Set(
             pending.filter((item) => new Date(item.created_at).getTime() < recent).map((item) => item.id)
           );
         }
 
+        // Ao reabrir o sistema já na tela de um exame, não recoloca por cima
+        // dele o alerta de outro exame.
+        const openExam = currentPath.current.match(/^\/radiografias\/([0-9a-f-]{36})$/)?.[1];
+
         for (const item of pending) {
           if (!announced.current.has(item.id)) {
             announced.current.add(item.id);
+            if (reopening && openExam && item.radiograph_id !== openExam) continue;
             announce(item);
           }
         }
@@ -105,13 +114,16 @@ export default function NotificationCenter() {
     };
   }, [refresh]);
 
-  // O alerta no canto vale para o momento em que o exame foi classificado. Ao
-  // mudar de tela, os alertas de outros exames saem: sem isso, o alerta de um
-  // exame inadequado continuava visível sobre o exame seguinte, mesmo adequado.
-  // O aviso em si continua no sino até alguém marcar "Ciente".
+  // O alerta de "refaça o exame" fica na tela até alguém clicar em "Ciente" ou
+  // no ×, inclusive ao passar pela lista, pelo Dashboard e pelas outras telas.
+  // Só sai sozinho quando se abre OUTRO exame: sem isso, ele ficaria por cima
+  // de um exame adequado. O aviso continua no sino de qualquer forma.
   useEffect(() => {
+    const openExam = pathname.match(/^\/radiografias\/([0-9a-f-]{36})$/)?.[1];
+    if (!openExam) return;
+
     for (const item of items) {
-      if (pathname !== `/radiografias/${item.radiograph_id}`) {
+      if (item.radiograph_id !== openExam) {
         dismissToast(`notification-${item.id}`);
       }
     }
