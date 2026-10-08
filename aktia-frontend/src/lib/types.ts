@@ -381,12 +381,18 @@ export interface PreReport extends PreReportSummary {
       uploaded_at: string;
       professional_name: string | null;
     };
+    /** Ausentes nos pré-laudos emitidos antes de o documento seguir a estrutura padrão. */
+    referral?: { exam_type: string; requested_by: string | null; clinical_indication: string | null };
+    exam_metadata?: Record<string, string | number | boolean> | null;
+    /** Interpretação escrita pelo cirurgião-dentista na emissão; o sistema nunca a preenche. */
+    impression?: string | null;
     quality: {
       ai_is_adequate: boolean | null;
       ai_score: number | null;
       model_version: string | null;
       review_verdict: "adequate" | "inadequate" | null;
       review_by: string | null;
+      review_reasons?: string[];
     };
     detector_model: string | null;
     findings: {

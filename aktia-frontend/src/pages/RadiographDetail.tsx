@@ -51,6 +51,14 @@ export default function RadiographDetail() {
   const [preReports, setPreReports] = useState<PreReportSummary[]>([]);
   const [issuing, setIssuing] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
+  const [issueFormOpen, setIssueFormOpen] = useState(false);
+  const [issueForm, setIssueForm] = useState({
+    exam_type: "Radiografia panorâmica",
+    requested_by: "",
+    clinical_indication: "",
+    impression: "",
+    notes: ""
+  });
   const [editingCode, setEditingCode] = useState(false);
   const [codeDraft, setCodeDraft] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -174,7 +182,7 @@ export default function RadiographDetail() {
     setIssueError(null);
 
     try {
-      const issued = await api.createPreReport({ radiograph_id: id });
+      const issued = await api.createPreReport({ radiograph_id: id, ...issueForm });
       navigate(`/pre-laudos/${issued.id}`);
     } catch (err) {
       setIssueError(err instanceof ApiError ? err.message : "Erro ao emitir o pré-laudo");
@@ -589,18 +597,84 @@ export default function RadiographDetail() {
                 )}
 
                 <div className="mt-4 border-t border-slate-100 pt-3">
-                  <button
-                    onClick={issuePreReport}
-                    disabled={issuing || pendingCount > 0}
-                    className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                  >
-                    {issuing ? "Emitindo..." : "Emitir pré-laudo"}
-                  </button>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {pendingCount > 0
-                      ? `Valide os ${pendingCount} achado(s) pendente(s) para poder emitir.`
-                      : "Gera o documento para imprimir ou salvar em PDF, só com os achados confirmados."}
-                  </p>
+                  {!issueFormOpen ? (
+                    <>
+                      <button
+                        onClick={() => setIssueFormOpen(true)}
+                        disabled={pendingCount > 0}
+                        className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                      >
+                        Emitir pré-laudo
+                      </button>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {pendingCount > 0
+                          ? `Valide os ${pendingCount} achado(s) pendente(s) para poder emitir.`
+                          : "Gera o documento no formato de laudo, só com os achados confirmados."}
+                      </p>
+                    </>
+                  ) : (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void issuePreReport();
+                      }}
+                      className="space-y-3"
+                    >
+                      <p className="text-sm font-semibold text-slate-700">Dados do pré-laudo</p>
+                      <p className="text-xs text-slate-500">
+                        Só o tipo de exame é obrigatório. O que ficar em branco sai como "não informado", e a
+                        impressão diagnóstica sai com linhas para preencher à mão.
+                      </p>
+
+                      {(
+                        [
+                          ["exam_type", "Tipo de exame", "Radiografia panorâmica", false],
+                          ["requested_by", "Profissional solicitante", "Nome e CRO", false],
+                          ["clinical_indication", "Indicação clínica", "Motivo do exame", true],
+                          ["impression", "Impressão diagnóstica", "Sua interpretação do exame", true],
+                          ["notes", "Recomendações e observações", "Condutas sugeridas, exames complementares", true]
+                        ] as const
+                      ).map(([field, label, placeholder, multiline]) => (
+                        <div key={field}>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
+                          {multiline ? (
+                            <textarea
+                              rows={2}
+                              value={issueForm[field]}
+                              placeholder={placeholder}
+                              onChange={(e) => setIssueForm((current) => ({ ...current, [field]: e.target.value }))}
+                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                            />
+                          ) : (
+                            <input
+                              required={field === "exam_type"}
+                              value={issueForm[field]}
+                              placeholder={placeholder}
+                              onChange={(e) => setIssueForm((current) => ({ ...current, [field]: e.target.value }))}
+                              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                            />
+                          )}
+                        </div>
+                      ))}
+
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={issuing}
+                          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          {issuing ? "Emitindo..." : "Emitir"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIssueFormOpen(false)}
+                          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  )}
                   {issueError && <p className="mt-1 text-sm text-red-600">{issueError}</p>}
                 </div>
 

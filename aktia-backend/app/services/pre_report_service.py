@@ -11,6 +11,16 @@ from app.services.finding_labels import CLASS_LABELS, LOW_RELIABILITY_CLASSES
 
 PRE_REPORT_TYPE = "analysis"
 
+# O documento segue as seções recomendadas para laudos radiológicos pela
+# European Society of Radiology ("Good practice for radiological reporting",
+# 2011) e pelo American College of Radiology ("Practice Parameter for
+# Communication of Diagnostic Imaging Findings"): identificação, indicação
+# clínica, técnica (com as limitações do exame), achados, comparação,
+# impressão e validação por assinatura. O que o sistema não sabe (indicação,
+# solicitante, impressão diagnóstica) é informado por quem emite ou fica
+# declarado como não informado: nada disso é preenchido pela IA.
+DEFAULT_EXAM_TYPE = "Radiografia panorâmica"
+
 # Texto fixo gravado em todo pré-laudo. Os números do detector são os medidos
 # no conjunto de teste do treino (ver yolo_service.detect_findings).
 DISCLAIMER = [
@@ -27,6 +37,12 @@ DISCLAIMER = [
 
 class PreReportCreate(BaseModel):
     radiograph_id: UUID
+    exam_type: str = Field(default=DEFAULT_EXAM_TYPE, min_length=2, max_length=120)
+    requested_by: str | None = Field(default=None, max_length=200)
+    clinical_indication: str | None = Field(default=None, max_length=2000)
+    # Interpretação do cirurgião-dentista. Nunca é gerada pelo sistema.
+    impression: str | None = Field(default=None, max_length=5000)
+    # Recomendações e observações.
     notes: str | None = Field(default=None, max_length=5000)
 
 
@@ -38,6 +54,12 @@ class PreReportExam(BaseModel):
     professional_name: str | None
 
 
+class PreReportReferral(BaseModel):
+    exam_type: str = DEFAULT_EXAM_TYPE
+    requested_by: str | None = None
+    clinical_indication: str | None = None
+
+
 class PreReportQuality(BaseModel):
     # "model_" é prefixo reservado do Pydantic; aqui é o nome da coluna do banco.
     model_config = ConfigDict(protected_namespaces=())
@@ -47,6 +69,7 @@ class PreReportQuality(BaseModel):
     model_version: str | None
     review_verdict: str | None
     review_by: str | None
+    review_reasons: list[str] = []
 
 
 class PreReportFinding(BaseModel):
@@ -74,6 +97,10 @@ class PreReportData(BaseModel):
     clinic: ReportClinic
     issued_by: ReportAuthor
     exam: PreReportExam
+    # Ausentes nos pré-laudos emitidos antes de o documento seguir a estrutura padrão.
+    referral: PreReportReferral = PreReportReferral()
+    exam_metadata: dict | None = None
+    impression: str | None = None
     quality: PreReportQuality
     detector_model: str | None
     findings: list[PreReportFinding]
@@ -118,7 +145,11 @@ def _to_pre_report(row: dict) -> PreReport:
     return PreReport(**_to_summary(row).model_dump(), notes=row.get("notes"), data=row["data"])
 
 
-def build_data(source: dict, current: dict) -> PreReportData:
+def _text(value: str | None) -> str | None:
+    return (value or "").strip() or None
+
+
+def build_data(source: dict, current: dict, payload: PreReportCreate) -> PreReportData:
     radiograph = source["radiograph"]
     analysis = source.get("analysis")
     yolo = (analysis or {}).get("yolo") or {}
@@ -183,8 +214,16 @@ def build_data(source: dict, current: dict) -> PreReportData:
             ai_score=float(score) if score is not None else None,
             model_version=analysis.get("model_version"),
             review_verdict=review.get("verdict"),
-            review_by=review.get("reviewed_by_name")
+            review_by=review.get("reviewed_by_name"),
+            review_reasons=review.get("reasons") or []
         ),
+        referral=PreReportReferral(
+            exam_type=payload.exam_type.strip(),
+            requested_by=_text(payload.requested_by),
+            clinical_indication=_text(payload.clinical_indication)
+        ),
+        exam_metadata=radiograph.get("exam_metadata"),
+        impression=_text(payload.impression),
         detector_model=yolo.get("model"),
         findings=findings,
         groups=sorted(groups.values(), key=lambda g: (-g.count, g.label)),
@@ -205,7 +244,7 @@ def create(payload: PreReportCreate, current: dict) -> PreReport:
             detail="Radiografia não encontrada"
         )
 
-    data = build_data(source, current)
+    data = build_data(source, current, payload)
     identification = data.exam.patient_code or data.exam.file_name
 
     row = report_service._insert_report({
@@ -214,7 +253,7 @@ def create(payload: PreReportCreate, current: dict) -> PreReport:
         "report_type": PRE_REPORT_TYPE,
         "radiograph_id": str(payload.radiograph_id),
         "title": f"Pré-laudo — {identification}",
-        "notes": (payload.notes or "").strip() or None,
+        "notes": _text(payload.notes),
         "data": data.model_dump(mode="json")
     })
 

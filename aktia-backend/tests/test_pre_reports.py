@@ -70,8 +70,13 @@ def test_pre_report_contains_only_confirmed_findings(client, login, exam):
     assert data["exam"]["professional_name"] == "Dra. Ana"
     assert data["quality"] == {
         "ai_is_adequate": True, "ai_score": 82.0, "model_version": "modelo-de-teste",
-        "review_verdict": "adequate", "review_by": "Dra. Ana"
+        "review_verdict": "adequate", "review_by": "Dra. Ana", "review_reasons": []
     }
+    # Sem nada informado na emissão, o documento declara o padrão e deixa o resto em branco.
+    assert data["referral"] == {
+        "exam_type": "Radiografia panorâmica", "requested_by": None, "clinical_indication": None
+    }
+    assert data["impression"] is None and data["exam_metadata"] is None
     assert data["detector_model"] == "detector-de-teste"
     assert any("Não é laudo" in line for line in data["disclaimer"])
 
@@ -152,3 +157,50 @@ def test_pre_report_routes_require_authentication(client):
     assert client.post(URL, json={"radiograph_id": str(uuid4())}).status_code == 401
     assert client.get(URL, params={"radiograph_id": str(uuid4())}).status_code == 401
     assert client.get(f"{URL}/{uuid4()}").status_code == 401
+
+
+def test_pre_report_carries_what_the_dentist_informs_and_the_technical_data(client, login, exam, db):
+    exam["validate"]({i: "confirmed" for i in range(5)})
+    db.execute(
+        "update radiographs set exam_metadata = %s where id = %s",
+        (Jsonb({"source_format": "dicom", "manufacturer": "Fabricante X", "kvp": 70}), exam["radiograph"])
+    )
+    login(exam["clinic"], exam["dentist"])
+
+    report = client.post(URL, json={
+        "radiograph_id": exam["radiograph"],
+        "exam_type": "  Radiografia panorâmica digital ",
+        "requested_by": " Dr. Carlos (CRO 1234) ",
+        "clinical_indication": " Avaliação pré-ortodôntica. ",
+        "impression": " Sem alterações relevantes além das restaurações descritas. ",
+        "notes": "   "
+    }).json()
+    data = report["data"]
+
+    assert data["referral"] == {
+        "exam_type": "Radiografia panorâmica digital",
+        "requested_by": "Dr. Carlos (CRO 1234)",
+        "clinical_indication": "Avaliação pré-ortodôntica."
+    }
+    assert data["impression"] == "Sem alterações relevantes além das restaurações descritas."
+    assert data["exam_metadata"] == {"source_format": "dicom", "manufacturer": "Fabricante X", "kvp": 70}
+    assert report["notes"] is None
+
+
+def test_pre_reports_issued_before_the_standard_structure_still_open(client, login, exam, db):
+    exam["validate"]({i: "confirmed" for i in range(5)})
+    login(exam["clinic"], exam["dentist"])
+    issued = client.post(URL, json={"radiograph_id": exam["radiograph"]}).json()
+
+    # Formato antigo: sem referral, impression, exam_metadata e review_reasons.
+    db.execute(
+        "update reports set data = (data - 'referral' - 'impression' - 'exam_metadata') "
+        "#- '{quality,review_reasons}' where id = %s",
+        (issued["id"],)
+    )
+
+    reopened = client.get(f"{URL}/{issued['id']}")
+
+    assert reopened.status_code == 200
+    assert reopened.json()["data"]["referral"]["exam_type"] == "Radiografia panorâmica"
+    assert reopened.json()["data"]["impression"] is None

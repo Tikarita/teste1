@@ -189,7 +189,14 @@ export const api = {
   listPreReports: (radiographId: string) =>
     request<PreReportSummary[]>(`/reports/pre?radiograph_id=${radiographId}`),
   getPreReport: (id: string) => request<PreReport>(`/reports/pre/${id}`),
-  createPreReport: (payload: { radiograph_id: string; notes?: string }) =>
+  createPreReport: (payload: {
+    radiograph_id: string;
+    exam_type?: string;
+    requested_by?: string;
+    clinical_indication?: string;
+    impression?: string;
+    notes?: string;
+  }) =>
     request<PreReport>("/reports/pre", {
       method: "POST",
       body: JSON.stringify(payload)
