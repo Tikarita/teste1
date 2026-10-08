@@ -3,3 +3,9 @@
 body {
   @apply bg-slate-50 text-slate-900;
 }
+
+/* Impressão de relatórios e pré-laudos: folha A4 com margem de documento. */
+@page {
+  size: A4;
+  margin: 16mm 15mm;
+}

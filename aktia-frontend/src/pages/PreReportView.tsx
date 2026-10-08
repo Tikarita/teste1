@@ -1,11 +1,13 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api";
-import { colorFor } from "../lib/findingColors";
 import type { PreReport } from "../lib/types";
 
-// Garante que as cores de fundo saiam na impressão e no PDF.
+// Garante que os fundos (marcadores na imagem, cabeçalho da tabela) saiam na impressão.
 const PRINT_COLORS: CSSProperties = { printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" };
+
+// Uma cor só para todas as marcações: o documento é lido pelos números.
+const MARKER = "#facc15";
 
 // O documento mostra exatamente o que foi gravado na emissão (report.data).
 // A imagem vem do exame: se a radiografia for excluída, o pré-laudo continua
@@ -44,10 +46,16 @@ export default function PreReportView() {
 
   // A revisão do profissional, quando existe, é a que vale para o documento.
   const adequate = quality.review_verdict !== null ? quality.review_verdict === "adequate" : quality.ai_is_adequate;
-  const qualitySource = quality.review_verdict !== null ? "revisão do profissional" : "classificação automática";
+  const qualitySource =
+    quality.review_verdict !== null
+      ? `avaliação do profissional${quality.review_by ? ` (${quality.review_by})` : ""}`
+      : "classificação automática";
+
+  const validators = [...new Set(data.findings.map((f) => f.validated_by_name).filter(Boolean))].join(", ");
+  const hasFlagged = data.findings.some((f) => f.low_reliability);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="mx-auto max-w-[210mm] space-y-4">
       <div className="flex items-center justify-between print:hidden">
         <Link
           to={report.radiograph_id ? `/radiografias/${report.radiograph_id}` : "/radiografias"}
@@ -63,268 +71,176 @@ export default function PreReportView() {
         </button>
       </div>
 
-      <article className="overflow-hidden rounded-xl border border-slate-200 bg-white print:rounded-none print:border-0">
-        {/* Faixa de título */}
-        <header className="bg-slate-900 px-8 py-6 text-white" style={PRINT_COLORS}>
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-300">AktIA · {data.clinic.name}</p>
-              <h1 className="mt-1 text-2xl font-semibold">Pré-laudo radiográfico</h1>
-              <p className="mt-1 text-sm text-slate-300">Documento de apoio ao diagnóstico. Não é um laudo.</p>
-            </div>
-            <div className="shrink-0 rounded-lg bg-white/10 px-4 py-2 text-right" style={PRINT_COLORS}>
-              <p className="text-[11px] uppercase tracking-wide text-slate-300">Código do paciente</p>
-              <p className="text-lg font-semibold">{data.exam.patient_code ?? "não informado"}</p>
-            </div>
+      <article className="bg-white px-12 py-10 text-[13px] leading-relaxed text-slate-800 shadow-sm ring-1 ring-slate-200 print:p-0 print:shadow-none print:ring-0">
+        {/* Cabeçalho: quem emite e que documento é */}
+        <header className="flex items-end justify-between gap-6 border-b-2 border-slate-800 pb-3">
+          <div>
+            <p className="text-lg font-semibold text-slate-900">{data.clinic.name}</p>
+            {data.clinic.cnpj && <p className="text-xs text-slate-500">CNPJ {data.clinic.cnpj}</p>}
+          </div>
+          <div className="text-right">
+            <p className="text-lg font-semibold tracking-wide text-slate-900">PRÉ-LAUDO RADIOGRÁFICO</p>
+            <p className="text-xs text-slate-500">
+              Nº {report.id.slice(0, 8).toUpperCase()} · emitido em {new Date(report.created_at).toLocaleDateString("pt-BR")}
+            </p>
           </div>
         </header>
 
-        <div className="space-y-8 px-8 py-6">
-          {/* Dados do exame */}
-          <dl className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm md:grid-cols-4">
-            <Field label="Data do exame">{new Date(data.exam.uploaded_at).toLocaleDateString("pt-BR")}</Field>
-            <Field label="Realizado por">{data.exam.professional_name ?? "não informado"}</Field>
-            <Field label="Pré-laudo emitido por">{data.issued_by.full_name ?? "—"}</Field>
-            <Field label="Emitido em">{new Date(report.created_at).toLocaleString("pt-BR")}</Field>
-          </dl>
+        {/* Identificação do exame */}
+        <table className="mt-4 w-full border-collapse">
+          <tbody>
+            <tr>
+              <InfoCell label="Paciente (código)">{data.exam.patient_code ?? "Não informado"}</InfoCell>
+              <InfoCell label="Data do exame">{new Date(data.exam.uploaded_at).toLocaleDateString("pt-BR")}</InfoCell>
+            </tr>
+            <tr>
+              <InfoCell label="Exame realizado por">{data.exam.professional_name ?? "Não informado"}</InfoCell>
+              <InfoCell label="Pré-laudo emitido por">{data.issued_by.full_name ?? "—"}</InfoCell>
+            </tr>
+          </tbody>
+        </table>
 
-          {/* Resumo: o que o leitor precisa saber em 5 segundos */}
-          <section className="grid gap-4 md:grid-cols-3">
-            <div
-              className={`rounded-lg border-2 p-4 ${
-                adequate === null
-                  ? "border-slate-200 bg-slate-50"
-                  : adequate
-                  ? "border-emerald-300 bg-emerald-50"
-                  : "border-red-300 bg-red-50"
-              }`}
-              style={PRINT_COLORS}
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Qualidade da imagem</p>
-              <p
-                className={`mt-1 text-xl font-semibold ${
-                  adequate === null ? "text-slate-700" : adequate ? "text-emerald-800" : "text-red-800"
-                }`}
-              >
-                {adequate === null ? "Não avaliada" : adequate ? "Adequada" : "Inadequada"}
+        <Section title="Qualidade da imagem">
+          <p>
+            {adequate === null ? (
+              "Qualidade não avaliada."
+            ) : adequate ? (
+              <>
+                <strong>Adequada</strong> para avaliação, segundo a {qualitySource}.
+              </>
+            ) : (
+              <>
+                <strong>Inadequada</strong> para avaliação, segundo a {qualitySource}. Os achados abaixo devem ser
+                interpretados com cautela, e a repetição do exame deve ser considerada.
+              </>
+            )}
+          </p>
+        </Section>
+
+        <Section title="Achados">
+          {data.findings.length === 0 ? (
+            <p>Nenhum achado confirmado pelo profissional neste exame.</p>
+          ) : (
+            <>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-600" style={PRINT_COLORS}>
+                    <th className="border border-slate-300 px-3 py-1.5 font-semibold">Achado</th>
+                    <th className="w-28 border border-slate-300 px-3 py-1.5 text-center font-semibold">Quantidade</th>
+                    <th className="w-48 border border-slate-300 px-3 py-1.5 font-semibold">Número na imagem</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.groups.map((group) => (
+                    <tr key={group.class_code}>
+                      <td className="border border-slate-300 px-3 py-1.5">
+                        {group.label}
+                        {data.findings.some((f) => f.class_code === group.class_code && f.low_reliability) && " *"}
+                      </td>
+                      <td className="border border-slate-300 px-3 py-1.5 text-center">{group.count}</td>
+                      <td className="border border-slate-300 px-3 py-1.5">{group.numbers.join(", ")}</td>
+                    </tr>
+                  ))}
+                  <tr className="font-semibold">
+                    <td className="border border-slate-300 px-3 py-1.5">Total</td>
+                    <td className="border border-slate-300 px-3 py-1.5 text-center">{data.findings.length}</td>
+                    <td className="border border-slate-300 px-3 py-1.5" />
+                  </tr>
+                </tbody>
+              </table>
+
+              <p className="mt-2 text-xs text-slate-500">
+                Achados sugeridos por inteligência artificial e confirmados por {validators || "profissional da clínica"}.
+                {data.discarded_count > 0 &&
+                  ` ${data.discarded_count} ${data.discarded_count === 1 ? "sugestão foi descartada" : "sugestões foram descartadas"} na conferência.`}
+                {hasFlagged && " * Tipo de achado em que a detecção automática é menos confiável."}
               </p>
-              <p className="mt-1 text-xs text-slate-600">
-                Segundo a {qualitySource}
-                {quality.review_by && ` (${quality.review_by})`}.
-              </p>
-            </div>
+            </>
+          )}
+        </Section>
 
-            <div className="rounded-lg border-2 border-slate-200 bg-slate-50 p-4 md:col-span-2" style={PRINT_COLORS}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumo dos achados</p>
-              {data.findings.length === 0 ? (
-                <p className="mt-1 text-xl font-semibold text-slate-700">Nenhum achado confirmado</p>
-              ) : (
-                <>
-                  <p className="mt-1 text-xl font-semibold text-slate-900">
-                    {data.findings.length} {data.findings.length === 1 ? "achado confirmado" : "achados confirmados"}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {data.groups.map((group) => (
-                      <span
-                        key={group.class_code}
-                        className="rounded-full px-3 py-1 text-sm font-medium text-white"
-                        style={{ backgroundColor: colorFor(group.class_code), ...PRINT_COLORS }}
-                      >
-                        {group.count} × {group.label}
-                      </span>
-                    ))}
-                  </div>
-                </>
-              )}
+        <Section title="Imagem">
+          {imageUrl ? (
+            <div className="relative inline-block w-full">
+              <img src={imageUrl} alt="Radiografia do exame" className="block w-full" />
+              {data.findings.map((finding) => (
+                <div
+                  key={finding.number}
+                  className="absolute"
+                  style={{
+                    left: `${finding.bbox.x * 100}%`,
+                    top: `${finding.bbox.y * 100}%`,
+                    width: `${finding.bbox.width * 100}%`,
+                    height: `${finding.bbox.height * 100}%`,
+                    border: `1.5px solid ${MARKER}`
+                  }}
+                >
+                  <span
+                    className="absolute -top-[15px] left-[-1.5px] px-1 text-[10px] font-bold leading-[14px] text-slate-900"
+                    style={{ backgroundColor: MARKER, ...PRINT_COLORS }}
+                  >
+                    {finding.number}
+                  </span>
+                </div>
+              ))}
             </div>
-          </section>
-
-          {adequate === false && (
-            <p
-              className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-900"
-              style={PRINT_COLORS}
-            >
-              Atenção: a imagem foi considerada inadequada para diagnóstico. Os achados deste documento devem ser
-              lidos com cautela, e a repetição do exame deve ser avaliada.
+          ) : (
+            <p className="text-slate-500">A imagem deste exame não está mais disponível.</p>
+          )}
+          {imageUrl && data.findings.length > 0 && (
+            <p className="mt-1 text-xs text-slate-500">
+              Os números correspondem à coluna "Número na imagem" da tabela de achados.
             </p>
           )}
+        </Section>
 
-          {/* Imagem */}
-          <section className="break-inside-avoid">
-            <SectionTitle number={1}>Onde estão os achados</SectionTitle>
-            <p className="mb-3 text-sm text-slate-500">
-              Cada número na imagem corresponde a uma linha da lista abaixo. A cor indica o tipo de achado.
-            </p>
-            {imageUrl ? (
-              <div className="relative inline-block w-full">
-                <img src={imageUrl} alt="Radiografia do exame" className="w-full rounded-lg" />
-                {data.findings.map((finding) => (
-                  <div
-                    key={finding.number}
-                    className="absolute rounded-sm border-2"
-                    style={{
-                      left: `${finding.bbox.x * 100}%`,
-                      top: `${finding.bbox.y * 100}%`,
-                      width: `${finding.bbox.width * 100}%`,
-                      height: `${finding.bbox.height * 100}%`,
-                      borderColor: colorFor(finding.class_code)
-                    }}
-                  >
-                    <span
-                      className="absolute -left-0.5 -top-5 min-w-5 rounded px-1 text-center text-xs font-bold text-white"
-                      style={{ backgroundColor: colorFor(finding.class_code), ...PRINT_COLORS }}
-                    >
-                      {finding.number}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                A imagem deste exame não está mais disponível.
-              </p>
-            )}
-          </section>
+        <Section title="Observações">
+          {report.notes ? <p className="whitespace-pre-wrap">{report.notes}</p> : <p className="text-slate-500">Sem observações.</p>}
+        </Section>
 
-          {/* Lista de achados, agrupada por tipo */}
-          <section>
-            <SectionTitle number={2}>Lista de achados</SectionTitle>
-
-            {data.findings.length === 0 ? (
-              <p className="text-sm text-slate-600">
-                O profissional não confirmou nenhum achado neste exame.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {data.groups.map((group) => (
-                  <div
-                    key={group.class_code}
-                    className="break-inside-avoid overflow-hidden rounded-lg border border-slate-200"
-                  >
-                    <div
-                      className="flex items-center justify-between px-4 py-2 text-white"
-                      style={{ backgroundColor: colorFor(group.class_code), ...PRINT_COLORS }}
-                    >
-                      <p className="font-semibold">
-                        {group.label} <span className="text-xs font-normal opacity-80">({group.class_code})</span>
-                      </p>
-                      <p className="text-sm font-medium">
-                        {group.count} {group.count === 1 ? "achado" : "achados"}
-                      </p>
-                    </div>
-
-                    <ul className="divide-y divide-slate-100">
-                      {data.findings
-                        .filter((finding) => finding.class_code === group.class_code)
-                        .map((finding) => (
-                          <li key={finding.number} className="flex items-center justify-between gap-4 px-4 py-2 text-sm">
-                            <span className="flex items-center gap-3">
-                              <span
-                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                                style={{ backgroundColor: colorFor(finding.class_code), ...PRINT_COLORS }}
-                              >
-                                {finding.number}
-                              </span>
-                              <span className="text-slate-800">{finding.label}</span>
-                              {finding.low_reliability && (
-                                <span
-                                  className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800"
-                                  style={PRINT_COLORS}
-                                >
-                                  conferir com atenção
-                                </span>
-                              )}
-                            </span>
-                            <span className="shrink-0 text-right text-xs text-slate-500">
-                              Confirmado por {finding.validated_by_name ?? "—"}
-                              <span className="ml-2 text-slate-400">
-                                (IA: {Math.round(finding.confidence * 100)}% de confiança)
-                              </span>
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <p className="mt-3 text-xs text-slate-500">
-              A inteligência artificial sugeriu {data.detected_count}{" "}
-              {data.detected_count === 1 ? "achado" : "achados"}; o profissional confirmou {data.findings.length} e
-              descartou {data.discarded_count}.
-              {data.findings.some((finding) => finding.low_reliability) &&
-                ' "Conferir com atenção" marca os tipos de achado em que a IA costuma errar mais.'}
-            </p>
-          </section>
-
-          {/* Observações */}
-          <section className="break-inside-avoid">
-            <SectionTitle number={3}>Observações do profissional</SectionTitle>
-            {report.notes ? (
-              <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800" style={PRINT_COLORS}>
-                {report.notes}
-              </p>
-            ) : (
-              <p className="text-sm text-slate-500">Nenhuma observação registrada.</p>
-            )}
-          </section>
-
-          {/* Como ler */}
-          <section className="break-inside-avoid rounded-lg border border-slate-200 bg-slate-50 p-4" style={PRINT_COLORS}>
-            <p className="text-sm font-semibold text-slate-800">Como ler este documento</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-              <li>Este é um pré-laudo: ajuda na leitura do exame, mas não substitui a avaliação do cirurgião-dentista.</li>
-              <li>Os achados foram sugeridos por inteligência artificial e só constam aqui os que o profissional confirmou.</li>
-              <li>
-                A IA pode deixar de detectar achados. Se algo não aparece neste documento, isso não significa que não
-                exista.
-              </li>
-            </ul>
-          </section>
-
-          {/* Assinatura */}
-          <footer className="break-inside-avoid pt-8">
-            <div className="mx-auto w-2/3 border-t border-slate-400 pt-2 text-center text-sm text-slate-600">
-              Cirurgião-dentista responsável (nome e CRO)
-            </div>
-
-            <div className="mt-8 space-y-1 border-t border-slate-100 pt-3 text-[10px] leading-relaxed text-slate-400">
-              {data.disclaimer.map((line, i) => (
-                <p key={i}>{line}</p>
-              ))}
-              <p>
-                Arquivo: {data.exam.file_name} · Modelos: qualidade {quality.model_version ?? "não informado"}, detecção{" "}
-                {data.detector_model ?? "não informado"} · {data.clinic.cnpj ? `CNPJ ${data.clinic.cnpj} · ` : ""}
-                Documento {report.id}
-              </p>
-            </div>
-          </footer>
+        {/* Assinatura */}
+        <div className="mt-14 break-inside-avoid">
+          <div className="mx-auto w-72 border-t border-slate-500 pt-1.5 text-center text-xs text-slate-600">
+            Cirurgião-dentista responsável
+            <br />
+            Nome e CRO
+          </div>
         </div>
+
+        {/* Ressalvas */}
+        <footer className="mt-10 break-inside-avoid border-t border-slate-300 pt-3 text-[10.5px] leading-snug text-slate-500">
+          <p>
+            <strong>Este documento é um pré-laudo de apoio ao diagnóstico e não substitui o laudo nem a avaliação do
+            cirurgião-dentista.</strong>{" "}
+            A detecção automática pode deixar de identificar achados: a ausência de um item neste documento não
+            significa que ele não exista.
+          </p>
+          <p className="mt-1 text-slate-400">
+            Arquivo {data.exam.file_name} · Análise: {quality.model_version ?? "—"} e {data.detector_model ?? "—"} ·
+            Documento {report.id}
+          </p>
+        </footer>
       </article>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function InfoCell({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div>
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
-      <dd className="mt-0.5 font-medium text-slate-800">{children}</dd>
-    </div>
+    <td className="w-1/2 border border-slate-300 px-3 py-1.5 align-top">
+      <span className="block text-[10px] uppercase tracking-wide text-slate-500">{label}</span>
+      <span className="font-medium text-slate-900">{children}</span>
+    </td>
   );
 }
 
-function SectionTitle({ number, children }: { number: number; children: ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <h2 className="mb-2 flex items-center gap-2 text-base font-semibold text-slate-900">
-      <span
-        className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white"
-        style={PRINT_COLORS}
-      >
-        {number}
-      </span>
+    <section className="mt-6 break-inside-avoid">
+      <h2 className="mb-2 border-b border-slate-300 pb-1 text-[11px] font-semibold uppercase tracking-widest text-slate-700">
+        {title}
+      </h2>
       {children}
-    </h2>
+    </section>
   );
 }
