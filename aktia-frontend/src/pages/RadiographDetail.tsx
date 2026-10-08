@@ -8,7 +8,30 @@ import type { AnalysisResult, Radiograph, Review } from "../lib/types";
 // VITE_ENABLE_AI=false esconde a análise enquanto a IA não está no ar.
 const AI_ENABLED = import.meta.env.VITE_ENABLE_AI !== "false";
 
-const BOX_COLORS = ["#f97316", "#3b82f6", "#a855f7", "#ef4444", "#10b981"];
+// Uma cor fixa por tipo de achado: a mesma classe tem a mesma cor em todo exame.
+const CLASS_COLORS: Record<string, string> = {
+  OBT: "#3b82f6",
+  END: "#a855f7",
+  IMP: "#06b6d4",
+  PRR: "#f97316",
+  IMT: "#10b981",
+  CAR: "#ef4444",
+  API: "#e11d48",
+  BON: "#f59e0b",
+  ROT: "#84cc16",
+  FUR: "#d946ef",
+  APS: "#14b8a6",
+  ROR: "#f43f5e",
+  ORD: "#64748b",
+  SRD: "#0ea5e9"
+};
+
+function colorFor(classCode: string) {
+  return CLASS_COLORS[classCode] ?? "#64748b";
+}
+
+/** O que está em destaque na imagem: um tipo inteiro ou um achado específico. */
+type Highlight = { code: string; index: number | null } | null;
 
 export default function RadiographDetail() {
   const { id } = useParams<{ id: string }>();
@@ -24,7 +47,7 @@ export default function RadiographDetail() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [highlighted, setHighlighted] = useState<number | null>(null);
+  const [highlighted, setHighlighted] = useState<Highlight>(null);
 
   // Achados só aparecem quando vieram de um modelo real (ver YoloResult.available).
   const detected = analysis?.yolo.available ? analysis.yolo.findings : [];
@@ -94,6 +117,27 @@ export default function RadiographDetail() {
   // As caixas só aparecem quando o pré-laudo está liberado (ou aberto mesmo assim).
   const findings = preReportOpen ? detected : [];
 
+  // Pré-laudo agrupado por tipo de achado, do mais frequente para o menos.
+  const groups = [
+    ...detected
+      .reduce((byCode, finding, index) => {
+        const group = byCode.get(finding.class_code) ?? {
+          code: finding.class_code,
+          label: finding.label,
+          lowReliability: finding.low_reliability === true,
+          items: [] as { finding: (typeof detected)[number]; index: number }[]
+        };
+        group.items.push({ finding, index });
+        return byCode.set(finding.class_code, group);
+      }, new Map<string, { code: string; label: string; lowReliability: boolean; items: { finding: (typeof detected)[number]; index: number }[] }>())
+      .values()
+  ].sort((a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label));
+
+  function isLit(classCode: string, index: number) {
+    if (highlighted === null) return true;
+    return highlighted.index !== null ? highlighted.index === index : highlighted.code === classCode;
+  }
+
   const examImage = imageUrl && radiograph && (
     <div className="relative inline-block w-full">
       <img src={imageUrl} alt={radiograph.file_name} className="w-full rounded-md object-contain" />
@@ -111,13 +155,13 @@ export default function RadiographDetail() {
               top: `${finding.bbox.y * 100}%`,
               width: `${finding.bbox.width * 100}%`,
               height: `${finding.bbox.height * 100}%`,
-              borderColor: BOX_COLORS[i % BOX_COLORS.length],
-              opacity: highlighted === null || highlighted === i ? 1 : 0.25
+              borderColor: colorFor(finding.class_code),
+              opacity: isLit(finding.class_code, i) ? 1 : 0.2
             }}
           >
             <span
               className="absolute -top-5 left-0 whitespace-nowrap rounded px-1 text-[10px] font-medium text-white"
-              style={{ backgroundColor: BOX_COLORS[i % BOX_COLORS.length] }}
+              style={{ backgroundColor: colorFor(finding.class_code) }}
             >
               {finding.class_code}
             </span>
@@ -316,34 +360,62 @@ export default function RadiographDetail() {
                 {detected.length === 0 ? (
                   <p className="text-sm text-slate-400">Nenhum achado detectado nesta radiografia.</p>
                 ) : (
+                  <>
+                  <p className="mb-2 text-xs text-slate-400">
+                    Passe o mouse num tipo para destacá-lo na imagem; clique para ver cada achado.
+                  </p>
                   <ul className="space-y-2">
-                    {detected.map((finding, i) => (
-                      <li
-                        key={i}
-                        onMouseEnter={() => setHighlighted(i)}
-                        onMouseLeave={() => setHighlighted(null)}
-                        className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2 text-sm hover:bg-slate-50"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: BOX_COLORS[i % BOX_COLORS.length] }}
-                          />
-                          <span className="font-medium">{finding.label}</span>
-                          <span className="text-slate-400">({finding.class_code})</span>
-                          {finding.low_reliability && (
-                            <span
-                              className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
-                              title="O modelo tem desempenho fraco nesta classe de achado."
-                            >
-                              baixa confiabilidade
+                    {groups.map((group) => (
+                      <li key={group.code} className="rounded-md border border-slate-100">
+                        <details>
+                          <summary
+                            onMouseEnter={() => setHighlighted({ code: group.code, index: null })}
+                            onMouseLeave={() => setHighlighted(null)}
+                            className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50"
+                          >
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span
+                                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                style={{ backgroundColor: colorFor(group.code) }}
+                              />
+                              <span className="font-medium">{group.label}</span>
+                              <span className="text-slate-400">({group.code})</span>
+                              {group.lowReliability && (
+                                <span
+                                  className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                                  title="O modelo tem desempenho fraco nesta classe de achado."
+                                >
+                                  baixa confiabilidade
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </div>
-                        <span className="text-slate-500">{Math.round(finding.confidence * 100)}%</span>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                              {group.items.length}
+                            </span>
+                          </summary>
+
+                          <ul className="border-t border-slate-100">
+                            {group.items.map(({ finding, index }, position) => (
+                              <li
+                                key={index}
+                                onMouseEnter={() => setHighlighted({ code: group.code, index })}
+                                onMouseLeave={() => setHighlighted(null)}
+                                className="flex items-center justify-between px-3 py-1.5 pl-8 text-sm text-slate-600 hover:bg-slate-50"
+                              >
+                                <span>
+                                  {group.label} {position + 1}
+                                </span>
+                                <span className="text-slate-500">
+                                  confiança {Math.round(finding.confidence * 100)}%
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
                       </li>
                     ))}
                   </ul>
+                  </>
                 )}
 
                 <p className="mt-3 text-xs text-slate-400">
