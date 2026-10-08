@@ -3,7 +3,14 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, ApiError } from "../lib/api";
 import Heatmap from "../components/Heatmap";
 import ReviewCard from "../components/ReviewCard";
-import type { AnalysisResult, FindingDecision, FindingValidation, Radiograph, Review } from "../lib/types";
+import type {
+  AnalysisResult,
+  FindingDecision,
+  FindingValidation,
+  PreReportSummary,
+  Radiograph,
+  Review
+} from "../lib/types";
 
 // VITE_ENABLE_AI=false esconde a análise enquanto a IA não está no ar.
 const AI_ENABLED = import.meta.env.VITE_ENABLE_AI !== "false";
@@ -46,6 +53,11 @@ export default function RadiographDetail() {
   const [review, setReview] = useState<Review | null>(null);
   const [validations, setValidations] = useState<FindingValidation[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [preReports, setPreReports] = useState<PreReportSummary[]>([]);
+  const [issuing, setIssuing] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
+  const [editingCode, setEditingCode] = useState(false);
+  const [codeDraft, setCodeDraft] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -80,6 +92,7 @@ export default function RadiographDetail() {
         setAnalysis(res.data.analysis_result ?? null);
         setReview(res.review ?? null);
         setValidations(res.finding_validations ?? []);
+        api.listPreReports(res.data.id).then(setPreReports).catch(() => setPreReports([]));
         const url = res.signed_url?.signedUrl ?? res.signed_url?.signedURL ?? null;
         setImageUrl(url && url.startsWith("http") ? url : null);
       })
@@ -160,6 +173,32 @@ export default function RadiographDetail() {
     }
   }
 
+  async function issuePreReport() {
+    if (!id) return;
+    setIssuing(true);
+    setIssueError(null);
+
+    try {
+      const issued = await api.createPreReport({ radiograph_id: id });
+      navigate(`/pre-laudos/${issued.id}`);
+    } catch (err) {
+      setIssueError(err instanceof ApiError ? err.message : "Erro ao emitir o pré-laudo");
+      setIssuing(false);
+    }
+  }
+
+  async function savePatientCode() {
+    if (!id) return;
+
+    try {
+      const res = await api.setPatientCode(id, codeDraft);
+      if (res.data) setRadiograph(res.data);
+      setEditingCode(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao salvar o código do paciente");
+    }
+  }
+
   function isLit(classCode: string, index: number) {
     if (highlighted === null) return true;
     return highlighted.index !== null ? highlighted.index === index : highlighted.code === classCode;
@@ -212,6 +251,39 @@ export default function RadiographDetail() {
             &larr; Voltar
           </Link>
           <h1 className="mt-1 text-xl font-semibold text-slate-900">{radiograph.file_name}</h1>
+
+          {editingCode ? (
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                autoFocus
+                value={codeDraft}
+                maxLength={60}
+                onChange={(e) => setCodeDraft(e.target.value)}
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                placeholder="Nº do prontuário (sem nome ou CPF)"
+              />
+              <button onClick={savePatientCode} className="text-sm font-medium text-slate-700 underline">
+                Salvar
+              </button>
+              <button onClick={() => setEditingCode(false)} className="text-sm text-slate-500 underline">
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <p className="mt-0.5 text-sm text-slate-500">
+              Código do paciente:{" "}
+              <span className="font-medium text-slate-700">{radiograph.patient_code ?? "não informado"}</span>{" "}
+              <button
+                onClick={() => {
+                  setCodeDraft(radiograph.patient_code ?? "");
+                  setEditingCode(true);
+                }}
+                className="text-xs underline"
+              >
+                {radiograph.patient_code ? "alterar" : "informar"}
+              </button>
+            </p>
+          )}
         </div>
 
         <button
@@ -496,6 +568,22 @@ export default function RadiographDetail() {
                   </>
                 )}
 
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <button
+                    onClick={issuePreReport}
+                    disabled={issuing || pendingCount > 0}
+                    className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  >
+                    {issuing ? "Emitindo..." : "Emitir pré-laudo"}
+                  </button>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {pendingCount > 0
+                      ? `Valide os ${pendingCount} achado(s) pendente(s) para poder emitir.`
+                      : "Gera o documento para imprimir ou salvar em PDF, só com os achados confirmados."}
+                  </p>
+                  {issueError && <p className="mt-1 text-sm text-red-600">{issueError}</p>}
+                </div>
+
                 <p className="mt-3 text-xs text-slate-400">
                   Ferramenta de apoio ao diagnóstico. Os resultados não substituem a avaliação de um
                   profissional habilitado.
@@ -505,6 +593,24 @@ export default function RadiographDetail() {
           </div>
         </div>
       </div>
+
+      {preReports.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Pré-laudos emitidos ({preReports.length})</h2>
+          <ul className="divide-y divide-slate-100 text-sm">
+            {preReports.map((item) => (
+              <li key={item.id} className="flex items-center justify-between py-2">
+                <span className="text-slate-600">
+                  {new Date(item.created_at).toLocaleString("pt-BR")} · por {item.issued_by_name ?? "—"}
+                </span>
+                <Link to={`/pre-laudos/${item.id}`} className="font-medium text-slate-700 hover:underline">
+                  Abrir
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {expanded && imageUrl && (
         <div

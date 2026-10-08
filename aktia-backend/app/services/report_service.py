@@ -54,17 +54,25 @@ def _insert_report(row: dict) -> dict:
     return response.data[0]
 
 
-def _select_reports(clinic_id: str, report_id: str | None = None) -> list[dict]:
+def _select_reports(
+    clinic_id: str,
+    report_id: str | None = None,
+    report_type: str = QUALITY_REPORT_TYPE,
+    radiograph_id: str | None = None
+) -> list[dict]:
     query = (
         supabase
         .table("reports")
         .select("*")
         .eq("clinic_id", str(clinic_id))
-        .eq("report_type", QUALITY_REPORT_TYPE)
+        .eq("report_type", report_type)
     )
 
     if report_id is not None:
         query = query.eq("id", str(report_id))
+
+    if radiograph_id is not None:
+        query = query.eq("radiograph_id", str(radiograph_id))
 
     return execute_with_retry(query.order("created_at", desc=True)).data or []
 

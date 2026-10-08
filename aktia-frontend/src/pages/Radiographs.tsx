@@ -20,6 +20,7 @@ export default function Radiographs() {
 
   const [file, setFile] = useState<File | null>(null);
   const [professionalId, setProfessionalId] = useState("");
+  const [patientCode, setPatientCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { showToast, dismissToast } = useToasts();
@@ -109,8 +110,13 @@ export default function Radiographs() {
     setFormError(null);
 
     try {
-      const uploaded = await api.uploadRadiograph({ professional_id: professionalId, file });
+      const uploaded = await api.uploadRadiograph({
+        professional_id: professionalId,
+        patient_code: patientCode,
+        file
+      });
       setFile(null);
+      setPatientCode("");
       loadRadiographs();
 
       if (AI_ENABLED && uploaded.data[0]) {
@@ -143,7 +149,19 @@ export default function Radiographs() {
       <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Enviar radiografia</h2>
 
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Código do paciente (opcional)</label>
+            <input
+              value={patientCode}
+              maxLength={60}
+              onChange={(e) => setPatientCode(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Nº do prontuário"
+            />
+            <p className="mt-1 text-[11px] text-slate-400">Use só o código da clínica. Não digite nome nem CPF.</p>
+          </div>
+
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Profissional responsável pela captura</label>
             <select

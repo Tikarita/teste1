@@ -43,6 +43,10 @@ class FakeQuery:
         self.operation = "delete"
         return self
 
+    def update(self, payload):
+        self.operation, self.payload = "update", payload
+        return self
+
     def execute(self):
         if self.operation == "insert":
             row = {"id": str(uuid4()), **self.payload}
@@ -57,6 +61,10 @@ class FakeQuery:
         if self.operation == "delete":
             for row in matches:
                 self.rows.remove(row)
+
+        if self.operation == "update":
+            for row in matches:
+                row.update(self.payload)
 
         return FakeResponse(matches)
 
@@ -324,3 +332,31 @@ def test_adequate_analysis_sends_no_notification(client, login, clinics, fake_su
 
     assert response.status_code == 200
     assert fake_supabase.notifications == []
+
+
+def test_upload_stores_the_trimmed_patient_code(client, login, clinics, fake_supabase):
+    clinic_a, (user, _) = clinics["a"]
+    login(clinic_a, user)
+
+    with_code = upload(client, patient_code="  PRONT-0042  ")
+    without_code = upload(client)
+    too_long = upload(client, patient_code="x" * 61)
+
+    assert with_code.status_code == 200 and without_code.status_code == 200
+    assert [r["patient_code"] for r in fake_supabase.tables["radiographs"]] == ["PRONT-0042", None]
+    assert too_long.status_code == 400
+
+
+def test_patient_code_can_be_set_later_only_inside_the_clinic(client, login, clinics, fake_supabase):
+    clinic_a, (user_a, _) = clinics["a"]
+    clinic_b, (user_b, _) = clinics["b"]
+    login(clinic_a, user_a)
+    radiograph_id = upload(client).json()["data"][0]["id"]
+
+    updated = client.put(f"/api/v1/analysis/{radiograph_id}/patient-code", json={"patient_code": " P-7 "})
+    login(clinic_b, user_b)
+    other = client.put(f"/api/v1/analysis/{radiograph_id}/patient-code", json={"patient_code": "invasor"})
+
+    assert updated.status_code == 200 and updated.json()["data"]["patient_code"] == "P-7"
+    assert other.status_code == 404
+    assert fake_supabase.tables["radiographs"][0]["patient_code"] == "P-7"

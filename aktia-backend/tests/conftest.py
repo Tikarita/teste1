@@ -206,15 +206,21 @@ def reports_on_database(db, rpc_on_database, monkeypatch):
             [Jsonb(value) if isinstance(value, (dict, list)) else value for value in row.values()]
         ).fetchone()
 
-    def select(clinic_id: str, report_id: str | None = None) -> list[dict]:
+    def select(
+        clinic_id: str,
+        report_id: str | None = None,
+        report_type: str = "quality",
+        radiograph_id: str | None = None
+    ) -> list[dict]:
         return db.execute(
             """
             select * from reports
-            where clinic_id = %s and report_type = 'quality'
+            where clinic_id = %s and report_type = %s
               and (%s::uuid is null or id = %s::uuid)
+              and (%s::uuid is null or radiograph_id = %s::uuid)
             order by created_at desc
             """,
-            (clinic_id, report_id, report_id)
+            (clinic_id, report_type, report_id, report_id, radiograph_id, radiograph_id)
         ).fetchall()
 
     monkeypatch.setattr(report_service, "_insert_report", insert)

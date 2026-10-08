@@ -7,6 +7,8 @@ import type {
   FindingDecision,
   FindingValidation,
   NotificationList,
+  PreReport,
+  PreReportSummary,
   ProfessionalProfile,
   ProfessionalsStats,
   QualityFindingsStats,
@@ -146,8 +148,11 @@ export const api = {
     }),
   // Clínica e autor do envio vêm da sessão no backend. Sem professional_id, o
   // responsável pela captura é o próprio usuário logado.
-  uploadRadiograph: (payload: { professional_id?: string; file: File }) => {
+  uploadRadiograph: (payload: { professional_id?: string; patient_code?: string; file: File }) => {
     const formData = new FormData();
+    if (payload.patient_code?.trim()) {
+      formData.append("patient_code", payload.patient_code.trim());
+    }
     if (payload.professional_id) {
       formData.append("professional_id", payload.professional_id);
     }
@@ -174,6 +179,21 @@ export const api = {
     request<ProfessionalProfile>(statsPath(`professionals/${id}`, query)),
   statsDetector: (query: StatsQuery) => request<DetectorStats>(statsPath("detector", query)),
   statsReviews: (query: StatsQuery) => request<ReviewStatsResponse>(statsPath("reviews", query)),
+
+  setPatientCode: (id: string, patientCode: string) =>
+    request<{ data: Radiograph | null }>(`/analysis/${id}/patient-code`, {
+      method: "PUT",
+      body: JSON.stringify({ patient_code: patientCode })
+    }),
+
+  listPreReports: (radiographId: string) =>
+    request<PreReportSummary[]>(`/reports/pre?radiograph_id=${radiographId}`),
+  getPreReport: (id: string) => request<PreReport>(`/reports/pre/${id}`),
+  createPreReport: (payload: { radiograph_id: string; notes?: string }) =>
+    request<PreReport>("/reports/pre", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
 
   listNotifications: () => request<NotificationList>("/notifications/"),
   markNotificationRead: (id: string) =>

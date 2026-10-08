@@ -104,6 +104,8 @@ export interface Radiograph {
   uploaded_by: string;
   /** Profissional responsável pela captura. null em radiografias antigas. */
   professional_id?: string | null;
+  /** Número do prontuário na clínica. Única identificação do paciente guardada. */
+  patient_code?: string | null;
   file_name: string;
   file_path: string;
   file_type: string;
@@ -349,4 +351,51 @@ export interface DetectorStats {
     confirmation_rate: number | null;
   }[];
   insufficient_data: boolean;
+}
+
+// --- Pré-laudo emitido (/reports/pre) ------------------------------------------
+
+export interface PreReportSummary {
+  id: string;
+  title: string | null;
+  radiograph_id: string | null;
+  created_at: string;
+  issued_by_name: string | null;
+}
+
+export interface PreReport extends PreReportSummary {
+  notes: string | null;
+  /** Cópia congelada na emissão: só os achados que o profissional confirmou. */
+  data: {
+    clinic: { name: string; cnpj: string | null };
+    issued_by: { id: string; full_name: string | null };
+    exam: {
+      radiograph_id: string;
+      file_name: string;
+      patient_code: string | null;
+      uploaded_at: string;
+      professional_name: string | null;
+    };
+    quality: {
+      ai_is_adequate: boolean | null;
+      ai_score: number | null;
+      model_version: string | null;
+      review_verdict: "adequate" | "inadequate" | null;
+      review_by: string | null;
+    };
+    detector_model: string | null;
+    findings: {
+      number: number;
+      class_code: string;
+      label: string;
+      low_reliability: boolean;
+      confidence: number;
+      bbox: BoundingBox;
+      validated_by_name: string | null;
+    }[];
+    groups: { class_code: string; label: string; count: number; numbers: number[] }[];
+    detected_count: number;
+    discarded_count: number;
+    disclaimer: string[];
+  };
 }

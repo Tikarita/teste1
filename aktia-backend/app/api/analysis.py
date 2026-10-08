@@ -1,6 +1,7 @@
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 from app.api.auth import get_current_user
 from app.core.config import settings
@@ -63,15 +64,40 @@ def _resolve_professional_id(professional_id: UUID | None, current: dict) -> str
     return str(professional_id)
 
 
+PATIENT_CODE_MAX_LENGTH = 60
+
+
+def _clean_patient_code(value: str | None) -> str | None:
+    """
+    Código do paciente na clínica (número do prontuário). É a única
+    identificação guardada: nome, CPF e data de nascimento não entram aqui.
+    """
+    code = (value or "").strip()
+
+    if len(code) > PATIENT_CODE_MAX_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"O código do paciente pode ter no máximo {PATIENT_CODE_MAX_LENGTH} caracteres."
+        )
+
+    return code or None
+
+
+class PatientCodeUpdate(BaseModel):
+    patient_code: str | None = Field(default=None, max_length=200)
+
+
 @router.post("/upload")
 async def upload_radiograph(
     professional_id: UUID | None = Form(None),
+    patient_code: str | None = Form(None),
     file: UploadFile = File(...),
     current=Depends(get_current_user)
 ):
     clinic_id = current["clinic"]["id"]
     uploaded_by = current["profile"]["id"]
     professional_id = _resolve_professional_id(professional_id, current)
+    patient_code = _clean_patient_code(patient_code)
 
     if file.content_type not in settings.ALLOWED_IMAGE_TYPES:
         raise HTTPException(
@@ -99,6 +125,7 @@ async def upload_radiograph(
             "clinic_id": clinic_id,
             "uploaded_by": uploaded_by,
             "professional_id": professional_id,
+            "patient_code": patient_code,
             "file_name": file.filename,
             "file_path": unique_file_name,
             "file_type": file.content_type,
@@ -278,6 +305,36 @@ def review_radiograph(
     _get_clinic_radiograph(radiograph_id, current["clinic"]["id"])
 
     return review_service.create_review(radiograph_id, payload, current)
+
+
+@router.put("/{radiograph_id}/patient-code")
+def set_patient_code(
+    radiograph_id: str,
+    payload: PatientCodeUpdate,
+    current=Depends(get_current_user)
+):
+    """Define ou corrige o código do paciente de um exame já enviado."""
+    _get_clinic_radiograph(radiograph_id, current["clinic"]["id"])
+    code = _clean_patient_code(payload.patient_code)
+
+    try:
+        response = (
+            supabase
+            .table("radiographs")
+            .update({"patient_code": code})
+            .eq("id", radiograph_id)
+            .eq("clinic_id", current["clinic"]["id"])
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+    return {
+        "data": response.data[0] if response.data else None
+    }
 
 
 @router.post("/{radiograph_id}/findings/validate", response_model=list[FindingValidation])
