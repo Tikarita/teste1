@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -21,6 +22,10 @@ PRE_REPORT_TYPE = "analysis"
 # declarado como não informado: nada disso é preenchido pela IA.
 DEFAULT_EXAM_TYPE = "Radiografia panorâmica"
 
+# As duas diretrizes pedem o mesmo conteúdo, com ordem e títulos diferentes.
+# O formato escolhido na emissão fica gravado; a tela permite ver o outro.
+ReportFormat = Literal["esr", "acr"]
+
 # Texto fixo gravado em todo pré-laudo. Os números do detector são os medidos
 # no conjunto de teste do treino (ver yolo_service.detect_findings).
 DISCLAIMER = [
@@ -37,6 +42,7 @@ DISCLAIMER = [
 
 class PreReportCreate(BaseModel):
     radiograph_id: UUID
+    report_format: ReportFormat = "esr"
     exam_type: str = Field(default=DEFAULT_EXAM_TYPE, min_length=2, max_length=120)
     requested_by: str | None = Field(default=None, max_length=200)
     clinical_indication: str | None = Field(default=None, max_length=2000)
@@ -98,6 +104,7 @@ class PreReportData(BaseModel):
     issued_by: ReportAuthor
     exam: PreReportExam
     # Ausentes nos pré-laudos emitidos antes de o documento seguir a estrutura padrão.
+    report_format: ReportFormat = "esr"
     referral: PreReportReferral = PreReportReferral()
     exam_metadata: dict | None = None
     impression: str | None = None
@@ -217,6 +224,7 @@ def build_data(source: dict, current: dict, payload: PreReportCreate) -> PreRepo
             review_by=review.get("reviewed_by_name"),
             review_reasons=review.get("reasons") or []
         ),
+        report_format=payload.report_format,
         referral=PreReportReferral(
             exam_type=payload.exam_type.strip(),
             requested_by=_text(payload.requested_by),

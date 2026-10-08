@@ -360,6 +360,9 @@ export interface DetectorStats {
 
 // --- Pré-laudo emitido (/reports/pre) ------------------------------------------
 
+/** Estrutura do documento: European Society of Radiology ou American College of Radiology. */
+export type ReportFormat = "esr" | "acr";
+
 export interface PreReportSummary {
   id: string;
   title: string | null;
@@ -382,6 +385,7 @@ export interface PreReport extends PreReportSummary {
       professional_name: string | null;
     };
     /** Ausentes nos pré-laudos emitidos antes de o documento seguir a estrutura padrão. */
+    report_format?: ReportFormat;
     referral?: { exam_type: string; requested_by: string | null; clinical_indication: string | null };
     exam_metadata?: Record<string, string | number | boolean> | null;
     /** Interpretação escrita pelo cirurgião-dentista na emissão; o sistema nunca a preenche. */

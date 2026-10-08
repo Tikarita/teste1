@@ -52,6 +52,7 @@ export default function RadiographDetail() {
   const [issuing, setIssuing] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
   const [issueFormOpen, setIssueFormOpen] = useState(false);
+  const [issueFormat, setIssueFormat] = useState<"esr" | "acr">("esr");
   const [issueForm, setIssueForm] = useState({
     exam_type: "Radiografia panorâmica",
     requested_by: "",
@@ -182,7 +183,7 @@ export default function RadiographDetail() {
     setIssueError(null);
 
     try {
-      const issued = await api.createPreReport({ radiograph_id: id, ...issueForm });
+      const issued = await api.createPreReport({ radiograph_id: id, report_format: issueFormat, ...issueForm });
       navigate(`/pre-laudos/${issued.id}`);
     } catch (err) {
       setIssueError(err instanceof ApiError ? err.message : "Erro ao emitir o pré-laudo");
@@ -625,6 +626,22 @@ export default function RadiographDetail() {
                         Só o tipo de exame é obrigatório. O que ficar em branco sai como "não informado", e a
                         impressão diagnóstica sai com linhas para preencher à mão.
                       </p>
+
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Formato do documento</label>
+                        <select
+                          value={issueFormat}
+                          onChange={(e) => setIssueFormat(e.target.value as "esr" | "acr")}
+                          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        >
+                          <option value="esr">ESR — Sociedade Europeia de Radiologia</option>
+                          <option value="acr">ACR — Colégio Americano de Radiologia</option>
+                        </select>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          O conteúdo é o mesmo; mudam a ordem e os títulos das seções. Dá para alternar depois, na
+                          tela do documento.
+                        </p>
+                      </div>
 
                       {(
                         [

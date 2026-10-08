@@ -77,6 +77,7 @@ def test_pre_report_contains_only_confirmed_findings(client, login, exam):
         "exam_type": "Radiografia panorâmica", "requested_by": None, "clinical_indication": None
     }
     assert data["impression"] is None and data["exam_metadata"] is None
+    assert data["report_format"] == "esr"
     assert data["detector_model"] == "detector-de-teste"
     assert any("Não é laudo" in line for line in data["disclaimer"])
 
@@ -204,3 +205,14 @@ def test_pre_reports_issued_before_the_standard_structure_still_open(client, log
     assert reopened.status_code == 200
     assert reopened.json()["data"]["referral"]["exam_type"] == "Radiografia panorâmica"
     assert reopened.json()["data"]["impression"] is None
+
+
+def test_pre_report_format_is_recorded_and_validated(client, login, exam):
+    exam["validate"]({i: "confirmed" for i in range(5)})
+    login(exam["clinic"], exam["dentist"])
+
+    acr = client.post(URL, json={"radiograph_id": exam["radiograph"], "report_format": "acr"})
+    invalid = client.post(URL, json={"radiograph_id": exam["radiograph"], "report_format": "abnt"})
+
+    assert acr.status_code == 201 and acr.json()["data"]["report_format"] == "acr"
+    assert invalid.status_code == 422

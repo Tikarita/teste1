@@ -16,6 +16,7 @@ import type {
   QualityReport,
   QualitySummary,
   Radiograph,
+  ReportFormat,
   ReportSummary,
   Review,
   ReviewReason,
@@ -191,6 +192,7 @@ export const api = {
   getPreReport: (id: string) => request<PreReport>(`/reports/pre/${id}`),
   createPreReport: (payload: {
     radiograph_id: string;
+    report_format?: ReportFormat;
     exam_type?: string;
     requested_by?: string;
     clinical_indication?: string;
