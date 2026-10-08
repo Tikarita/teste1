@@ -143,3 +143,58 @@ def test_upload_rejects_unsupported_formats_and_broken_dicoms(client, login, cli
     assert pdf.status_code == 400 and "JPG, PNG ou DICOM" in pdf.json()["detail"]
     assert broken.status_code == 400
     assert fake_supabase.tables["radiographs"] == [] and fake_supabase.files == {}
+
+
+# --- ida e volta: a conversão devolve a mesma imagem que entrou no DICOM ---------
+
+def make_dicom(gray8: np.ndarray, *, inverted: bool = False, rescale: bool = False, window: bool = True) -> bytes:
+    """Embrulha uma imagem de 8 bits num DICOM de 12 bits, como os sensores costumam gravar."""
+    from pydicom.dataset import FileDataset, FileMetaDataset
+    from pydicom.uid import ExplicitVRLittleEndian, generate_uid
+
+    meta = FileMetaDataset()
+    meta.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.1.1"
+    meta.MediaStorageSOPInstanceUID = generate_uid()
+    meta.TransferSyntaxUID = ExplicitVRLittleEndian
+
+    dataset = FileDataset(None, {}, file_meta=meta, preamble=b"\0" * 128)
+    dataset.SOPClassUID, dataset.SOPInstanceUID = meta.MediaStorageSOPClassUID, meta.MediaStorageSOPInstanceUID
+    dataset.Modality, dataset.PatientName, dataset.PatientID = "PX", "PACIENTE^TESTE", "123.456.789-00"
+    dataset.Rows, dataset.Columns = gray8.shape
+    dataset.SamplesPerPixel, dataset.PixelRepresentation = 1, 0
+    dataset.BitsAllocated, dataset.BitsStored, dataset.HighBit = 16, 12, 11
+
+    pixels = (gray8.astype(np.uint32) * 4095 // 255).astype(np.uint16)
+    if inverted:
+        pixels = 4095 - pixels
+    if rescale:
+        pixels = pixels // 2
+        dataset.RescaleSlope, dataset.RescaleIntercept = "2", "0"
+    if window:
+        dataset.WindowCenter, dataset.WindowWidth = "2047.5", "4096"
+
+    dataset.PhotometricInterpretation = "MONOCHROME1" if inverted else "MONOCHROME2"
+    dataset.PixelData = pixels.tobytes()
+
+    buffer = BytesIO()
+    dataset.save_as(buffer, enforce_file_format=True)
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("options", [
+    {},
+    {"inverted": True},
+    {"rescale": True},
+    {"inverted": True, "rescale": True},
+])
+def test_round_trip_preserves_the_image(options):
+    rows, columns = np.mgrid[0:120, 0:200]
+    original = ((rows * 2 + columns) % 256).astype(np.uint8)
+
+    png_bytes, metadata = dicom_service.convert(make_dicom(original, **options))
+    converted = np.asarray(Image.open(BytesIO(png_bytes))).astype(int)
+
+    assert converted.shape == original.shape
+    assert np.abs(converted - original.astype(int)).max() <= 2
+    assert metadata["modality"] == "PX"
+    assert "TESTE" not in str(metadata) and "123.456" not in str(metadata)
