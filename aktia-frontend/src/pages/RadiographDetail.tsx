@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import Heatmap from "../components/Heatmap";
+import { REFRESH_NOTIFICATIONS_EVENT } from "../components/NotificationCenter";
 import { colorFor } from "../lib/findingColors";
 import ReviewCard from "../components/ReviewCard";
 import type {
@@ -106,6 +107,17 @@ export default function RadiographDetail() {
 
   useEffect(load, [id]);
 
+  // Vindo do envio (?analisar=1), a classificação começa sozinha assim que o
+  // exame carrega. A referência evita disparar de novo se a tela re-renderizar.
+  const autoAnalyzed = useRef(false);
+  useEffect(() => {
+    if (autoAnalyzed.current || loading || !radiograph) return;
+    if (searchParams.get("analisar") !== "1" || !AI_ENABLED || radiograph.analysis_result) return;
+
+    autoAnalyzed.current = true;
+    void handleAnalyze();
+  }, [loading, radiograph]);
+
   async function handleAnalyze() {
     if (!id) return;
     setAnalyzing(true);
@@ -116,6 +128,9 @@ export default function RadiographDetail() {
       setAnalysis(res.data);
       // Análise nova, lista de achados nova: a validação recomeça.
       setValidations([]);
+      // Se o exame saiu inadequado, o backend gerou um aviso: busca na hora,
+      // em vez de esperar a próxima checagem periódica.
+      window.dispatchEvent(new Event(REFRESH_NOTIFICATIONS_EVENT));
     } catch (err) {
       setAnalyzeError(err instanceof ApiError ? err.message : "Erro ao analisar radiografia");
     } finally {
