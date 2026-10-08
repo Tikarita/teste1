@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.schemas.reviews import Review, ReviewCreate
-from app.services import finding_validation_service, notification_service, review_service
+from app.services import dicom_service, finding_validation_service, notification_service, review_service
 from app.services.finding_validation_service import FindingValidation, FindingValidationRequest
 from app.services.image_service import validate_image
 from app.services.supabase_service import supabase
@@ -99,17 +99,35 @@ async def upload_radiograph(
     professional_id = _resolve_professional_id(professional_id, current)
     patient_code = _clean_patient_code(patient_code)
 
-    if file.content_type not in settings.ALLOWED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail="Formato de arquivo não suportado. Envie JPG ou PNG."
-        )
-
     file_content = await file.read()
+    content_type = file.content_type
+    exam_metadata = None
 
-    validate_image(file_content, max_size_bytes=settings.MAX_UPLOAD_SIZE_BYTES)
+    if dicom_service.is_dicom(file_content, content_type, file.filename):
+        if len(file_content) > settings.MAX_DICOM_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Arquivo DICOM muito grande. Tamanho máximo: "
+                    f"{settings.MAX_DICOM_UPLOAD_SIZE_BYTES // (1024 * 1024)}MB."
+                )
+            )
 
-    file_extension = file.filename.split(".")[-1]
+        # O DICOM vira PNG e só os dados técnicos são aproveitados: o arquivo
+        # original, com os dados do paciente, não é armazenado.
+        file_content, exam_metadata = dicom_service.convert(file_content)
+        content_type = "image/png"
+        file_extension = "png"
+    else:
+        if content_type not in settings.ALLOWED_IMAGE_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail="Formato de arquivo não suportado. Envie JPG, PNG ou DICOM."
+            )
+
+        validate_image(file_content, max_size_bytes=settings.MAX_UPLOAD_SIZE_BYTES)
+        file_extension = file.filename.split(".")[-1]
+
     unique_file_name = f"{uuid4()}.{file_extension}"
 
     try:
@@ -117,7 +135,7 @@ async def upload_radiograph(
             path=unique_file_name,
             file=file_content,
             file_options={
-                "content-type": file.content_type
+                "content-type": content_type
             }
         )
 
@@ -128,9 +146,12 @@ async def upload_radiograph(
             "patient_code": patient_code,
             "file_name": file.filename,
             "file_path": unique_file_name,
-            "file_type": file.content_type,
+            "file_type": content_type,
             "file_size": len(file_content)
         }
+
+        if exam_metadata is not None:
+            radiograph_data["exam_metadata"] = exam_metadata
 
         response = (
             supabase

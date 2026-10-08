@@ -9,6 +9,7 @@ Pillow==11.1.0
 numpy==2.2.1
 truststore==0.10.4
 tzdata==2026.5
+pydicom==3.0.2
 torch==2.14.0
 torchvision==0.29.0
 

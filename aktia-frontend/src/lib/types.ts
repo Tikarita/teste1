@@ -106,6 +106,11 @@ export interface Radiograph {
   professional_id?: string | null;
   /** Número do prontuário na clínica. Única identificação do paciente guardada. */
   patient_code?: string | null;
+  /**
+   * Dados técnicos lidos do arquivo quando o exame chega como DICOM (data,
+   * tipo, aparelho, exposição). Nunca traz dados do paciente.
+   */
+  exam_metadata?: Record<string, string | number | boolean> | null;
   file_name: string;
   file_path: string;
   file_type: string;

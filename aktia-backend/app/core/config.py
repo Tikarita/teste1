@@ -36,6 +36,10 @@ class Settings:
 
     MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024
 
+    # DICOM guarda a imagem sem compressão e em 16 bits, então é bem maior
+    # que o JPG/PNG equivalente.
+    MAX_DICOM_UPLOAD_SIZE_BYTES: int = 60 * 1024 * 1024
+
     # Abaixo desse número de análises no período, as estatísticas devolvem
     # null + insufficient_data em vez de uma média que não significa nada.
     STATS_MIN_SAMPLE_SIZE: int = int(os.getenv("STATS_MIN_SAMPLE_SIZE", "5"))

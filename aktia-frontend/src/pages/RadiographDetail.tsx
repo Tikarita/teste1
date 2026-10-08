@@ -16,6 +16,22 @@ import type {
 // VITE_ENABLE_AI=false esconde a análise enquanto a IA não está no ar.
 const AI_ENABLED = import.meta.env.VITE_ENABLE_AI !== "false";
 
+// Rótulos dos dados técnicos que vêm do DICOM, na ordem em que aparecem.
+const EXAM_METADATA_LABELS: [string, string][] = [
+  ["exam_date", "Data do exame"],
+  ["modality", "Modalidade"],
+  ["manufacturer", "Fabricante"],
+  ["model", "Modelo do aparelho"],
+  ["station_name", "Estação"],
+  ["body_part", "Região examinada"],
+  ["kvp", "Tensão (kV)"],
+  ["tube_current_ma", "Corrente (mA)"],
+  ["exposure_time_ms", "Tempo de exposição (ms)"],
+  ["exposure_mas", "Exposição (mAs)"],
+  ["dose_area_product", "Produto dose-área"],
+  ["software_version", "Versão do software"]
+];
+
 /** O que está em destaque na imagem: um tipo inteiro ou um achado específico. */
 type Highlight = { code: string; index: number | null } | null;
 
@@ -328,7 +344,32 @@ export default function RadiographDetail() {
           <p className="mt-3 text-xs text-slate-400">
             {radiograph.file_type} · {(radiograph.file_size / 1024).toFixed(0)} KB
             {radiograph.created_at && ` · enviada em ${new Date(radiograph.created_at).toLocaleString("pt-BR")}`}
+            {radiograph.exam_metadata?.source_format === "dicom" && " · recebida em DICOM e convertida para PNG"}
           </p>
+
+          {radiograph.exam_metadata?.burned_in_annotation === true && (
+            <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              O arquivo DICOM indica que há texto gravado dentro da imagem (pode ser o nome do paciente). Confira a
+              imagem e, se for o caso, desative essa opção no aparelho.
+            </p>
+          )}
+
+          {radiograph.exam_metadata && (
+            <details className="mt-2 text-xs text-slate-500">
+              <summary className="cursor-pointer">Dados técnicos do exame (lidos do DICOM)</summary>
+              <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1">
+                {EXAM_METADATA_LABELS.filter(([key]) => radiograph.exam_metadata?.[key] !== undefined).map(([key, label]) => (
+                  <div key={key} className="flex justify-between gap-2">
+                    <dt>{label}</dt>
+                    <dd className="font-medium text-slate-600">{String(radiograph.exam_metadata?.[key])}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-2 text-slate-400">
+                Dados do paciente não são lidos nem guardados, e o arquivo DICOM original não é armazenado.
+              </p>
+            </details>
+          )}
         </div>
 
         <div className="space-y-4">

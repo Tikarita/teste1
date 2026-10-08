@@ -180,11 +180,11 @@ export default function Radiographs() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Arquivo (JPG ou PNG)</label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Arquivo (JPG, PNG ou DICOM)</label>
             <input
               required
               type="file"
-              accept="image/jpeg,image/png,image/jpg"
+              accept="image/jpeg,image/png,image/jpg,.dcm,.dicom,application/dicom"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
             />
