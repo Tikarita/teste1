@@ -103,6 +103,7 @@ def fake_supabase(monkeypatch):
     monkeypatch.setattr(analysis, "supabase", fake)
     # A revisão humana tem testes próprios (test_reviews.py); aqui não há nenhuma.
     monkeypatch.setattr(analysis.review_service, "_current_review_row", lambda *_: None)
+    monkeypatch.setattr(analysis.finding_validation_service, "_current_rows", lambda *_: [])
     # Os avisos têm testes próprios (test_notifications.py); aqui só se confere que são pedidos.
     monkeypatch.setattr(analysis.notification_service, "_insert_notifications", fake.notifications.extend)
     return fake

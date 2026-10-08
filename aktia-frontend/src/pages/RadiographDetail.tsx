@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, ApiError } from "../lib/api";
 import Heatmap from "../components/Heatmap";
 import ReviewCard from "../components/ReviewCard";
-import type { AnalysisResult, Radiograph, Review } from "../lib/types";
+import type { AnalysisResult, FindingDecision, FindingValidation, Radiograph, Review } from "../lib/types";
 
 // VITE_ENABLE_AI=false esconde a análise enquanto a IA não está no ar.
 const AI_ENABLED = import.meta.env.VITE_ENABLE_AI !== "false";
@@ -44,6 +44,8 @@ export default function RadiographDetail() {
 
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [review, setReview] = useState<Review | null>(null);
+  const [validations, setValidations] = useState<FindingValidation[]>([]);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -77,6 +79,7 @@ export default function RadiographDetail() {
         setRadiograph(res.data);
         setAnalysis(res.data.analysis_result ?? null);
         setReview(res.review ?? null);
+        setValidations(res.finding_validations ?? []);
         const url = res.signed_url?.signedUrl ?? res.signed_url?.signedURL ?? null;
         setImageUrl(url && url.startsWith("http") ? url : null);
       })
@@ -94,6 +97,8 @@ export default function RadiographDetail() {
     try {
       const res = await api.analyzeRadiograph(id);
       setAnalysis(res.data);
+      // Análise nova, lista de achados nova: a validação recomeça.
+      setValidations([]);
     } catch (err) {
       setAnalyzeError(err instanceof ApiError ? err.message : "Erro ao analisar radiografia");
     } finally {
@@ -133,6 +138,28 @@ export default function RadiographDetail() {
       .values()
   ].sort((a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label));
 
+  const decisionByIndex = new Map(validations.map((v) => [v.finding_index, v.decision]));
+  const pendingCount = detected.filter((_, index) => !decisionByIndex.has(index)).length;
+
+  // Grava a decisão sobre um ou mais achados. Repetir a decisão já tomada a desfaz.
+  async function decide(indexes: number[], decision: FindingDecision) {
+    if (!id || indexes.length === 0) return;
+    setValidationError(null);
+
+    const undo = indexes.length === 1 && decisionByIndex.get(indexes[0]) === decision;
+
+    try {
+      setValidations(
+        await api.validateFindings(
+          id,
+          indexes.map((finding_index) => ({ finding_index, decision: undo ? "pending" : decision }))
+        )
+      );
+    } catch (err) {
+      setValidationError(err instanceof ApiError ? err.message : "Erro ao salvar a validação");
+    }
+  }
+
   function isLit(classCode: string, index: number) {
     if (highlighted === null) return true;
     return highlighted.index !== null ? highlighted.index === index : highlighted.code === classCode;
@@ -146,11 +173,13 @@ export default function RadiographDetail() {
 
       {/* Com o mapa de calor ligado, as caixas de achados saem para não poluir a leitura. */}
       {!showHeatmap &&
-        findings.map((finding, i) => (
+        findings.map((finding, i) =>
+          decisionByIndex.get(i) === "discarded" ? null : (
           <div
             key={i}
             className="absolute rounded-sm border-2 transition-opacity"
             style={{
+              borderStyle: decisionByIndex.has(i) ? "solid" : "dashed",
               left: `${finding.bbox.x * 100}%`,
               top: `${finding.bbox.y * 100}%`,
               width: `${finding.bbox.width * 100}%`,
@@ -166,7 +195,8 @@ export default function RadiographDetail() {
               {finding.class_code}
             </span>
           </div>
-        ))}
+          )
+        )}
     </div>
   );
 
@@ -361,9 +391,19 @@ export default function RadiographDetail() {
                   <p className="text-sm text-slate-400">Nenhum achado detectado nesta radiografia.</p>
                 ) : (
                   <>
-                  <p className="mb-2 text-xs text-slate-400">
-                    Passe o mouse num tipo para destacá-lo na imagem; clique para ver cada achado.
+                  <p className="mb-2 text-xs text-slate-500">
+                    {pendingCount === 0 ? (
+                      <span className="font-medium text-emerald-700">Todos os achados foram validados.</span>
+                    ) : (
+                      <span>
+                        <span className="font-medium text-slate-700">{pendingCount}</span> de {detected.length}{" "}
+                        achado(s) aguardando a sua validação.
+                      </span>
+                    )}{" "}
+                    Clique num tipo para confirmar ou descartar cada achado; na imagem, os pendentes ficam
+                    tracejados e os descartados somem.
                   </p>
+                  {validationError && <p className="mb-2 text-sm text-red-600">{validationError}</p>}
                   <ul className="space-y-2">
                     {groups.map((group) => (
                       <li key={group.code} className="rounded-md border border-slate-100">
@@ -389,8 +429,24 @@ export default function RadiographDetail() {
                                 </span>
                               )}
                             </span>
-                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                              {group.items.length}
+                            <span className="flex shrink-0 items-center gap-2">
+                              {group.items.some(({ index }) => !decisionByIndex.has(index)) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    void decide(
+                                      group.items.filter(({ index }) => !decisionByIndex.has(index)).map(({ index }) => index),
+                                      "confirmed"
+                                    );
+                                  }}
+                                  className="rounded border border-emerald-300 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50"
+                                >
+                                  Confirmar todos
+                                </button>
+                              )}
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                                {group.items.length}
+                              </span>
                             </span>
                           </summary>
 
@@ -402,11 +458,33 @@ export default function RadiographDetail() {
                                 onMouseLeave={() => setHighlighted(null)}
                                 className="flex items-center justify-between px-3 py-1.5 pl-8 text-sm text-slate-600 hover:bg-slate-50"
                               >
-                                <span>
+                                <span className={decisionByIndex.get(index) === "discarded" ? "text-slate-400 line-through" : ""}>
                                   {group.label} {position + 1}
+                                  <span className="ml-2 text-xs text-slate-400">
+                                    confiança {Math.round(finding.confidence * 100)}%
+                                  </span>
                                 </span>
-                                <span className="text-slate-500">
-                                  confiança {Math.round(finding.confidence * 100)}%
+                                <span className="flex gap-1">
+                                  <button
+                                    onClick={() => void decide([index], "confirmed")}
+                                    className={`rounded border px-2 py-0.5 text-xs font-medium ${
+                                      decisionByIndex.get(index) === "confirmed"
+                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                        : "border-slate-300 text-slate-600 hover:bg-emerald-50"
+                                    }`}
+                                  >
+                                    Confirmar
+                                  </button>
+                                  <button
+                                    onClick={() => void decide([index], "discarded")}
+                                    className={`rounded border px-2 py-0.5 text-xs font-medium ${
+                                      decisionByIndex.get(index) === "discarded"
+                                        ? "border-red-600 bg-red-600 text-white"
+                                        : "border-slate-300 text-slate-600 hover:bg-red-50"
+                                    }`}
+                                  >
+                                    Descartar
+                                  </button>
                                 </span>
                               </li>
                             ))}

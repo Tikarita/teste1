@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.schemas.reviews import Review, ReviewCreate
-from app.services import notification_service, review_service
+from app.services import finding_validation_service, notification_service, review_service
+from app.services.finding_validation_service import FindingValidation, FindingValidationRequest
 from app.services.image_service import validate_image
 from app.services.supabase_service import supabase
 
@@ -173,7 +174,10 @@ def get_radiograph(radiograph_id: str, current=Depends(get_current_user)):
         return {
             "data": radiograph,
             "signed_url": signed_url_response,
-            "review": review_service.get_current_review(radiograph_id, current["clinic"]["id"])
+            "review": review_service.get_current_review(radiograph_id, current["clinic"]["id"]),
+            "finding_validations": finding_validation_service.get_current(
+                radiograph_id, current["clinic"]["id"]
+            )
         }
 
     except HTTPException:
@@ -274,6 +278,21 @@ def review_radiograph(
     _get_clinic_radiograph(radiograph_id, current["clinic"]["id"])
 
     return review_service.create_review(radiograph_id, payload, current)
+
+
+@router.post("/{radiograph_id}/findings/validate", response_model=list[FindingValidation])
+def validate_findings(
+    radiograph_id: str,
+    payload: FindingValidationRequest,
+    current=Depends(get_current_user)
+):
+    """
+    Registra a decisão do profissional sobre achados do pré-laudo: confirmado,
+    descartado ou "pending" para desfazer. Devolve as decisões vigentes.
+    """
+    _get_clinic_radiograph(radiograph_id, current["clinic"]["id"])
+
+    return finding_validation_service.save(radiograph_id, payload, current)
 
 
 @router.delete("/{radiograph_id}")

@@ -15,7 +15,8 @@ from app.schemas.stats import (
     SummaryResponse,
 )
 from app.schemas.reviews import ReviewStatsResponse
-from app.services import professional_service, quality_stats, review_service
+from app.services import finding_validation_service, professional_service, quality_stats, review_service
+from app.services.finding_validation_service import DetectorStatsResponse
 from app.services.professional_service import ProfessionalProfile
 
 
@@ -107,3 +108,11 @@ def professional_profile(
     current=Depends(get_current_user)
 ):
     return professional_service.get_profile(current, member_id, filters)
+
+
+@router.get("/detector", response_model=DetectorStatsResponse)
+def detector(
+    filters: quality_stats.StatsFilters = Depends(get_filters),
+    current=Depends(get_current_user)
+):
+    return finding_validation_service.get_detector_stats(current["clinic"]["id"], filters)

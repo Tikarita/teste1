@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useClinics } from "../context/ClinicContext";
 import type {
   ClinicalFindingsStats,
+  DetectorStats,
   QualityHistory,
   QualitySummary,
   Radiograph,
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState<QualityHistory | null>(null);
   const [clinicalFindings, setClinicalFindings] = useState<ClinicalFindingsStats | null>(null);
   const [reviews, setReviews] = useState<ReviewStatsResponse | null>(null);
+  const [detector, setDetector] = useState<DetectorStats | null>(null);
   const [recent, setRecent] = useState<Radiograph[]>([]);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -74,9 +76,11 @@ export default function Dashboard() {
       api.statsSummary({ period }).catch(orNull),
       api.statsHistory({ period }).catch(orNull),
       api.statsClinicalFindings({ period }).catch(orNull),
-      api.statsReviews({ period }).catch(orNull)
+      api.statsReviews({ period }).catch(orNull),
+      api.statsDetector({ period }).catch(orNull)
     ])
-      .then(([summaryData, historyData, clinicalData, reviewData]) => {
+      .then(([summaryData, historyData, clinicalData, reviewData, detectorData]) => {
+        setDetector(detectorData);
         setReviews(reviewData);
         setSummary(summaryData);
         setHistory(historyData);
@@ -282,6 +286,46 @@ export default function Dashboard() {
           )}
         </Panel>
       </div>
+
+      <Panel
+        title="Acerto do detector de achados"
+        subtitle="Dos achados que os profissionais validaram no pré-laudo, quantos foram confirmados."
+      >
+        {loading && <Muted>Carregando...</Muted>}
+        {!loading && detector && detector.validated === 0 && (
+          <Muted>Nenhum achado validado no período. A validação é feita na tela de cada exame.</Muted>
+        )}
+        {!loading && detector && detector.validated > 0 && (
+          <>
+            <p className="mb-3 text-sm text-slate-600">
+              {detector.confirmation_rate != null ? (
+                <>
+                  <span className="text-lg font-semibold text-slate-900">{detector.confirmation_rate.toFixed(1)}%</span>{" "}
+                  dos {detector.validated} achados validados foram confirmados.
+                </>
+              ) : (
+                `${detector.validated} achado(s) validado(s); mínimo de ${detector.min_sample_size} para calcular a taxa.`
+              )}
+            </p>
+            <ul className="space-y-1.5">
+              {detector.classes.map((item) => (
+                <li key={item.class_code} className="flex items-center gap-3 text-sm">
+                  <span className="w-56 shrink-0 truncate text-slate-600">
+                    {item.label} <span className="text-slate-400">({item.class_code})</span>
+                  </span>
+                  <Bar percent={item.confirmation_rate ?? 0} />
+                  <span className="w-44 shrink-0 text-right text-slate-700">
+                    {item.confirmation_rate != null ? `${item.confirmation_rate.toFixed(1)}%` : "dados insuficientes"}
+                    <span className="ml-1 text-xs text-slate-400">
+                      ({item.confirmed} de {item.validated})
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Panel>
 
       <div className="flex gap-4 text-xs text-slate-400">
         <span>API: {apiStatus === "checking" ? "verificando..." : apiStatus === "online" ? "online" : "offline"}</span>

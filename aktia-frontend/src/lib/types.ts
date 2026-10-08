@@ -320,3 +320,33 @@ export interface NotificationList {
   unread_count: number;
   items: NotificationItem[];
 }
+
+// --- Validação dos achados do pré-laudo ---------------------------------------
+
+export type FindingDecision = "confirmed" | "discarded";
+
+export interface FindingValidation {
+  /** Posição do achado em analysis_result.yolo.findings. */
+  finding_index: number;
+  class_code: string;
+  decision: FindingDecision;
+  validated_by: string | null;
+  validated_by_name: string | null;
+  created_at: string;
+}
+
+export interface DetectorStats {
+  min_sample_size: number;
+  validated: number;
+  confirmation_rate: number | null;
+  classes: {
+    class_code: string;
+    label: string;
+    low_reliability: boolean;
+    confirmed: number;
+    discarded: number;
+    validated: number;
+    confirmation_rate: number | null;
+  }[];
+  insufficient_data: boolean;
+}

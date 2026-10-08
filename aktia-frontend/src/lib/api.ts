@@ -3,6 +3,9 @@ import type {
   AuthSession,
   Clinic,
   ClinicalFindingsStats,
+  DetectorStats,
+  FindingDecision,
+  FindingValidation,
   NotificationList,
   ProfessionalProfile,
   ProfessionalsStats,
@@ -121,7 +124,18 @@ export const api = {
   listRadiographsByClinic: (clinicId: string) =>
     request<{ data: Radiograph[] }>(`/analysis/clinic/${clinicId}`),
   getRadiograph: (id: string) =>
-    request<{ data: Radiograph; signed_url: Record<string, string>; review: Review | null }>(`/analysis/${id}`),
+    request<{
+      data: Radiograph;
+      signed_url: Record<string, string>;
+      review: Review | null;
+      finding_validations: FindingValidation[];
+    }>(`/analysis/${id}`),
+  // "pending" desfaz uma decisão. A resposta traz todas as decisões vigentes do exame.
+  validateFindings: (id: string, decisions: { finding_index: number; decision: FindingDecision | "pending" }[]) =>
+    request<FindingValidation[]>(`/analysis/${id}/findings/validate`, {
+      method: "POST",
+      body: JSON.stringify({ decisions })
+    }),
   reviewRadiograph: (
     id: string,
     payload: { verdict: "adequate" | "inadequate"; reasons: ReviewReason[]; repeated: boolean; notes?: string }
@@ -158,6 +172,7 @@ export const api = {
 
   statsProfessionalProfile: (id: string, query: StatsQuery) =>
     request<ProfessionalProfile>(statsPath(`professionals/${id}`, query)),
+  statsDetector: (query: StatsQuery) => request<DetectorStats>(statsPath("detector", query)),
   statsReviews: (query: StatsQuery) => request<ReviewStatsResponse>(statsPath("reviews", query)),
 
   listNotifications: () => request<NotificationList>("/notifications/"),
