@@ -1,0 +1,4 @@
+# Dependências da IA em produção, além de requirements-deploy.txt.
+# O torch entra à parte, na versão só-CPU (ver Dockerfile): a versão padrão do
+# pip no Linux traz as bibliotecas de GPU e passa de 2 GB.
+ultralytics==8.4.157

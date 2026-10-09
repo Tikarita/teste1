@@ -8,6 +8,8 @@ from torch import nn
 from torchvision import transforms
 from torchvision.models import efficientnet_b0
 
+from app.services.model_store import ensure_model_file
+
 # Classificador supervisionado adequado/inadequado treinado por
 # train_efficientnet.py (raiz do repo). O .pt é só o state_dict e fica fora do
 # Git (*.pt no .gitignore): precisa ser copiado para app/ml/ em cada ambiente.
@@ -53,11 +55,7 @@ def _get_classes() -> list[str]:
 def _get_model() -> nn.Module:
     global _model
     if _model is None:
-        if not WEIGHTS_PATH.exists():
-            raise FileNotFoundError(
-                f"Pesos do classificador de qualidade não encontrados em {WEIGHTS_PATH}. "
-                "Copie o best.pt gerado por train_efficientnet.py para esse caminho."
-            )
+        ensure_model_file(WEIGHTS_PATH)
 
         model = efficientnet_b0(weights=None)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, len(_get_classes()))

@@ -44,6 +44,10 @@ class Settings:
     # null + insufficient_data em vez de uma média que não significa nada.
     STATS_MIN_SAMPLE_SIZE: int = int(os.getenv("STATS_MIN_SAMPLE_SIZE", "5"))
 
+    # Bucket privado do Supabase Storage de onde os pesos dos modelos são
+    # baixados quando não estão no disco (produção).
+    MODELS_BUCKET: str = os.getenv("MODELS_BUCKET", "models")
+
     # Fuso usado para definir onde começa e termina cada dia nas estatísticas.
     STATS_TIMEZONE: str = os.getenv("STATS_TIMEZONE", "America/Sao_Paulo")
 

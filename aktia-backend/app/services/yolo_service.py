@@ -4,6 +4,8 @@ from pathlib import Path
 from PIL import Image
 from ultralytics import YOLO
 
+from app.services.model_store import ensure_model_file
+
 # YOLOv8m treinado nas 14 classes de achados de dados/data.yaml. O .pt fica
 # fora do Git (*.pt no .gitignore): precisa ser copiado para app/ml/ em cada
 # ambiente.
@@ -24,11 +26,7 @@ _model: YOLO | None = None
 def _get_model() -> YOLO:
     global _model
     if _model is None:
-        if not WEIGHTS_PATH.exists():
-            raise FileNotFoundError(
-                f"Pesos do detector de achados não encontrados em {WEIGHTS_PATH}. "
-                "Copie o best.pt do treino do YOLO para esse caminho."
-            )
+        ensure_model_file(WEIGHTS_PATH)
         _model = YOLO(str(WEIGHTS_PATH))
     return _model
 
