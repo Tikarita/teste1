@@ -23,4 +23,4 @@ pip install -r requirements.txt
 uvicorn app.main:app --port 8000
 ```
 
-A publicação em produção está descrita em `deploy/huggingface/`.
+A publicação em produção está descrita em `deploy/docker/`.

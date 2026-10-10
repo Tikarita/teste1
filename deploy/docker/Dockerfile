@@ -1,5 +1,5 @@
 # AktIA completo num serviço só: o frontend é compilado e servido pela própria
-# API, que roda com a IA ligada. Feito para o Hugging Face Spaces (Docker).
+# API, que roda com a IA ligada. Serve para qualquer host de contêiner Docker.
 #
 # Precisa de cerca de 2 GB de memória: os dois modelos carregados e uma análise
 # em andamento chegaram a 1,7 GB em teste local. Os pesos (.pt) não entram na
