@@ -1,0 +1,16 @@
+# Contexto das imagens em deploy/docker/: só as duas pastas do app interessam.
+.git
+dados
+runs
+runs_qc
+*.pt
+**/node_modules
+**/dist
+**/venv
+**/.venv
+**/tests
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.local
+.mcp.json

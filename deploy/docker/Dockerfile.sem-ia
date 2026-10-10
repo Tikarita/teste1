@@ -1,0 +1,42 @@
+# AktIA num serviço só, SEM a IA: o frontend é compilado e servido pela própria
+# API. Cabe em hospedagem gratuita de 512 MB (ex.: Render free), porque não
+# instala o PyTorch nem carrega os modelos.
+#
+# Ficam de fora a classificação automática de qualidade, o mapa de calor e o
+# pré-laudo. Envio, revisão pelo profissional, estatísticas e relatórios
+# funcionam. Para a versão com a IA, use o Dockerfile desta mesma pasta.
+
+# --- 1. Frontend ---------------------------------------------------------------
+FROM node:22-slim AS frontend
+WORKDIR /build
+
+COPY aktia-frontend/package.json aktia-frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY aktia-frontend/ ./
+# Mesmo endereço da API (caminho relativo, sem CORS) e telas sem os botões da IA.
+ENV VITE_API_URL=/api/v1 \
+    VITE_ENABLE_AI=false
+RUN npm run build
+
+# --- 2. Backend sem a IA ---------------------------------------------------------
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    ENABLE_AI=false \
+    PORT=10000 \
+    FRONTEND_DIST=/app/frontend
+
+RUN useradd --create-home --uid 1000 aktia
+WORKDIR /app
+
+COPY aktia-backend/requirements-deploy.txt ./
+RUN pip install -r requirements-deploy.txt
+
+COPY --chown=aktia:aktia aktia-backend/app ./app
+COPY --chown=aktia:aktia --from=frontend /build/dist ./frontend
+USER aktia
+
+EXPOSE 10000
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]

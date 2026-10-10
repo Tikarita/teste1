@@ -1,20 +1,17 @@
+# Publicação gratuita no Render: site e API num serviço só, sem a IA
+# (o plano free tem 512 MB e a IA precisa de cerca de 2 GB).
+# Para criar: Render -> New -> Blueprint -> este repositório.
 services:
   - type: web
-    name: aktia-backend
-    runtime: python
-    rootDir: aktia-backend
+    name: aktia
+    runtime: docker
+    dockerfilePath: ./deploy/docker/Dockerfile.sem-ia
+    dockerContext: .
     plan: free
-    buildCommand: pip install -r requirements-deploy.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.8
-      - key: ENABLE_AI
-        value: "false"
+      # Preenchidas no painel do Render; nunca ficam no repositório.
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
-        sync: false
-      - key: CORS_ORIGINS
         sync: false
