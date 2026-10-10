@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import Clinic from "./pages/Clinic";
 import Login from "./pages/Login";
 import PreReportView from "./pages/PreReportView";
+import Privacy from "./pages/Privacy";
 import ProfessionalProfile from "./pages/ProfessionalProfile";
 import Radiographs from "./pages/Radiographs";
 import Reports from "./pages/Reports";
@@ -15,6 +16,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/privacidade" element={<Privacy />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>

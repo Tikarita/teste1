@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ToastProvider } from "../context/ToastContext";
 import NotificationCenter from "./NotificationCenter";
@@ -48,7 +48,10 @@ export default function Layout() {
         </nav>
 
         <div className="px-3 py-4 border-t border-slate-800 text-xs text-slate-400">
-          AktIA API v1.0.0
+          <Link to="/privacidade" className="block hover:text-white">
+            Privacidade e LGPD
+          </Link>
+          <span className="mt-1 block">AktIA v1.0.0</span>
         </div>
       </aside>
 

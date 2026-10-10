@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../lib/api";
 
@@ -244,6 +244,12 @@ export default function Login() {
             )}
           </div>
         </div>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          <Link to="/privacidade" className="hover:underline">
+            Privacidade e LGPD
+          </Link>
+        </p>
       </div>
     </div>
   );
