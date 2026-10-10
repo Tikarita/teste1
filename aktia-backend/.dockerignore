@@ -1,9 +1,0 @@
-venv/
-.venv/
-tests/
-__pycache__/
-*.pyc
-.env
-.pytest_cache/
-# Os pesos são baixados do Supabase em produção, não vão na imagem.
-app/ml/*.pt

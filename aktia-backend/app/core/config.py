@@ -44,6 +44,10 @@ class Settings:
     # null + insufficient_data em vez de uma média que não significa nada.
     STATS_MIN_SAMPLE_SIZE: int = int(os.getenv("STATS_MIN_SAMPLE_SIZE", "5"))
 
+    # Pasta do frontend compilado. Quando definida, a API também serve o site
+    # (produção num serviço só). Sem ela, a API responde sozinha.
+    FRONTEND_DIST: str | None = os.getenv("FRONTEND_DIST") or None
+
     # Bucket privado do Supabase Storage de onde os pesos dos modelos são
     # baixados quando não estão no disco (produção).
     MODELS_BUCKET: str = os.getenv("MODELS_BUCKET", "models")

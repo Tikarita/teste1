@@ -1,5 +1,9 @@
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.analysis import router as analysis_router
 from app.api.auth import router as auth_router
@@ -36,15 +40,43 @@ app.include_router(reports_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 
 
-@app.get("/")
-def root():
-    return {
-        "message": "AktIA API online"
-    }
-
-
 @app.get("/health")
 def health():
     return {
         "status": "healthy"
     }
+
+
+def mount_frontend(application: FastAPI, dist: Path) -> None:
+    """
+    Serve o frontend já compilado (pasta `dist` do Vite) no mesmo endereço da
+    API. É o arranjo de produção: um serviço só, sem CORS entre site e API.
+    Qualquer caminho que não seja arquivo devolve o index.html, porque as
+    rotas das telas (/radiografias, /relatorios...) são resolvidas no navegador.
+    """
+    dist = dist.resolve()
+    index = dist / "index.html"
+
+    application.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+    @application.get("/{path:path}", include_in_schema=False)
+    def frontend(path: str):
+        if path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        requested = (dist / path).resolve()
+        # Só arquivos de dentro da pasta do frontend: nada de ../ para fora dela.
+        if path and requested.is_file() and requested.is_relative_to(dist):
+            return FileResponse(requested)
+
+        return FileResponse(index)
+
+
+if settings.FRONTEND_DIST and (Path(settings.FRONTEND_DIST) / "index.html").exists():
+    mount_frontend(app, Path(settings.FRONTEND_DIST))
+else:
+    @app.get("/")
+    def root():
+        return {
+            "message": "AktIA API online"
+        }
