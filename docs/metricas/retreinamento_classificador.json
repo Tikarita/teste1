@@ -1,0 +1,33 @@
+{
+ "antes": {
+  "modelo": "efficientnet-b0-adequacy-v1 (original, perda sem peso, seleção por loss)",
+  "acuracia": 0.7778,
+  "recall_inadequado": 0.5983,
+  "precisao_inadequado": 0.7249,
+  "especificidade": 0.8759,
+  "auc_roc": 0.8189,
+  "matriz": {
+   "tn": 367,
+   "fp": 52,
+   "fn": 92,
+   "tp": 137
+  }
+ },
+ "depois": {
+  "modelo": "efficientnet-b0-adequacy-v2 (perda ponderada + seleção por recall de validação)",
+  "split": "oficial (igual ao original)",
+  "n_teste": 648,
+  "acuracia": 0.7809,
+  "recall_inadequado": 0.6463,
+  "precisao_inadequado": 0.7081,
+  "especificidade": 0.8544,
+  "auc_roc": 0.8297,
+  "matriz": {
+   "tn": 358,
+   "fp": 61,
+   "fn": 81,
+   "tp": 148
+  },
+  "weight_decay_escolhido": 0.0
+ }
+}

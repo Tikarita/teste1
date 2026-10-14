@@ -17,7 +17,7 @@ ML_DIR = Path(__file__).resolve().parent.parent / "ml"
 WEIGHTS_PATH = ML_DIR / "efficientnet_best.pt"
 CLASSES_PATH = ML_DIR / "efficientnet_classes.json"
 
-MODEL_NAME = "efficientnet-b0-adequacy-v1"
+MODEL_NAME = "efficientnet-b0-adequacy-v2"
 ADEQUATE_CLASS = "adequado"
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,8 +76,13 @@ def classify_adequacy(image_bytes: bytes) -> dict:
     fronteira da decisão. É a saída do softmax, sem calibração: serve para
     ordenar e comparar, não como percentual de certeza clínica.
 
-    No conjunto de teste, o modelo teve acurácia de 77,9% e recall de 58,9%
-    para "inadequado" — ele deixa passar parte das imagens ruins.
+    No conjunto de teste (split oficial, 648 imagens), o modelo (v2) tem
+    acurácia de 78,1% e recall de 64,6% para "inadequado" — ele ainda deixa
+    passar parte das imagens ruins, mas menos que a v1 (acurácia 77,8%,
+    recall 59,8%). A v2 não muda arquitetura, dado nem split: só re-treina a
+    camada final (backbone continua congelado), escolhendo o checkpoint pelo
+    recall de validação em vez da menor perda de validação — ver
+    docs/metricas/retreinamento_classificador.json no repositório.
     """
     classes = _get_classes()
     model = _get_model()
