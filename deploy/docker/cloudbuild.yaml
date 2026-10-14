@@ -1,0 +1,20 @@
+# Build do AktIA (site + API com IA) para o Google Cloud Run.
+# Rodar a partir da raiz do repositório (o contexto do build precisa das
+# pastas aktia-frontend/ e aktia-backend/), com:
+#
+#   gcloud builds submit --config deploy/docker/cloudbuild.yaml \
+#     --substitutions=_IMAGE=REGIAO-docker.pkg.dev/PROJETO/aktia/aktia .
+#
+# Ver deploy/docker/README.md para o passo a passo completo de publicação.
+
+timeout: 1800s
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-f", "deploy/docker/Dockerfile", "-t", "${_IMAGE}", "."]
+
+images:
+  - "${_IMAGE}"
+
+options:
+  machineType: "E2_HIGHCPU_8"
