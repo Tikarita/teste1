@@ -37,3 +37,7 @@ supabase/.temp/
 
 # Pesos de modelos treinados (grandes demais para o Git)
 *.pt
+
+# Backups e caches gerados localmente, nao devem ir ao repositorio
+*.pt.bak
+dados/labels/*.cache
